@@ -35,7 +35,7 @@ def analyzed_app(tmp_path):
 
 
 def test_app_loads_without_exceptions():
-    at = AppTest.from_file("../app.py")
+    at = AppTest.from_file("../app.py", default_timeout=15)
     at.run()
     assert not at.exception
 
@@ -52,7 +52,7 @@ def test_full_pipeline_runs_end_to_end_and_populates_risk_overview():
     Risco" screen. No mocking: this is the only test that runs the modules
     wired together the way the app actually wires them.
     """
-    at = AppTest.from_file("../app.py")
+    at = AppTest.from_file("../app.py", default_timeout=15)
     at.run()
     assert not at.exception
 

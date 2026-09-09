@@ -1,106 +1,299 @@
-import streamlit as st
+"""Local release risk dashboard. Run with python -m streamlit run app.py."""
 
-from garantiu.bug_history import build_bug_history
+import os
+import sqlite3
+from pathlib import Path
+
+import git
+import streamlit as st
+from junitparser import JUnitXmlError
+
+from garantiu.bug_history import bug_history_detail_by_module, build_bug_history
 from garantiu.decision_log import get_decision_history, record_decision
 from garantiu.git_reader import get_changed_files
-from garantiu.incidents import load_incidents
+from garantiu.incidents import load_incident_details, load_incidents
 from garantiu.manual_test_guide import build_module_card
+from garantiu.module_detail import build_module_detail
+from garantiu.release_history import (
+    get_release_history, record_release_outcome, record_release_score,
+)
 from garantiu.scoring import score_modules, score_release
+from garantiu.test_history import flakiness_by_module, record_test_run
+from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import parse_junit_report, test_health_by_module
 
-st.set_page_config(page_title="garantiu", layout="wide")
+ROOT = Path(__file__).resolve().parent
+DATA_DIR = Path(os.environ.get("GARANTIU_DATA_DIR", ROOT))
+DECISIONS_DB = str(DATA_DIR / "garantiu.db")
+TEST_HISTORY_DB = str(DATA_DIR / "garantiu_test_history.db")
+RELEASE_HISTORY_DB = str(DATA_DIR / "garantiu_release_history.db")
+SCREENS = [
+    "Conectar Release", "Visão Geral do Risco", "Roteiro de Teste Manual",
+    "Suíte Automatizada Priorizada", "Detalhe do Módulo",
+    "Decisão de Publicação", "Histórico & Tendências",
+]
 
-if "analysis" not in st.session_state:
-    st.session_state.analysis = None
 
-screen = st.sidebar.radio(
-    "Tela",
-    ["Conectar Release", "Visão Geral do Risco", "Roteiro de Teste Manual", "Decisão de Publicação"],
-)
-
-if screen == "Conectar Release":
+def connect_release():
     st.title("Conectar release")
-    repo_path = st.text_input("Caminho do repositório", value=".")
+    st.text_input("Caminho do repositório", value=".", key="repo_path")
     base_ref = st.text_input("Comparar desde", value="HEAD~1")
     head_ref = st.text_input("Branch do release", value="HEAD")
-    junit_path = st.text_input("Relatório de testes (JUnit XML)", value="sample_data/sample_junit.xml")
-    incidents_path = st.text_input("Arquivo de incidentes (CSV)", value="sample_data/incidents.csv")
-
-    if st.button("Analisar mudanças"):
-        changed_files = get_changed_files(repo_path, base_ref, head_ref)
-        bug_history = build_bug_history(repo_path)
-        test_results = parse_junit_report(junit_path)
+    junit_path = st.text_input(
+        "Relatório de testes (JUnit XML)",
+        value=str(ROOT / "sample_data/sample_junit.xml"),
+    )
+    incidents_path = st.text_input(
+        "Arquivo de incidentes (CSV)",
+        value=str(ROOT / "sample_data/incidents.csv"),
+    )
+    incident_details_path = st.text_input(
+        "Arquivo de detalhe de incidentes (CSV, opcional)",
+        value=str(ROOT / "sample_data/incident_details.csv"),
+    )
+    st.caption(
+        "Os arquivos sample_data são exemplos. Para analisar seu produto, "
+        "use os relatórios e incidentes correspondentes ao repositório. "
+        "Cada análise registra uma rodada de testes; use relatórios de "
+        "execuções distintas para acompanhar a flakiness."
+    )
+    if not st.button("Analisar mudanças"):
+        return
+    st.session_state.analysis = None
+    with st.spinner("Lendo mudanças, testes e histórico..."):
+        repo_path = st.session_state.repo_path.strip()
+        if not repo_path or not base_ref.strip() or not head_ref.strip():
+            raise ValueError("Informe o repositório e as duas referências Git.")
+        with git.Repo(repo_path) as repo:
+            repo_key = os.path.normcase(str(Path(repo.working_dir).resolve()))
+            base_sha = repo.commit(base_ref.strip()).hexsha
+            head_sha = repo.commit(head_ref.strip()).hexsha
+        changed_files = get_changed_files(repo_key, base_sha, head_sha)
+        bug_history = build_bug_history(repo_key, ref=head_sha)
+        test_results = parse_junit_report(junit_path.strip())
         test_health = test_health_by_module(test_results)
-        incidents = load_incidents(incidents_path)
-
-        # flakiness real entra na Task 9; até lá, roda sem esse sub-sinal.
-        module_scores = score_modules(changed_files, bug_history, test_health, incidents, flakiness={})
-        release = score_release(module_scores)
-
-        st.session_state.analysis = {
-            "release_name": head_ref,
-            "changed_files": changed_files,
-            "module_scores": module_scores,
-            "release": release,
+        incidents = load_incidents(incidents_path.strip())
+        incident_details = (
+            load_incident_details(incident_details_path.strip())
+            if incident_details_path.strip() else {}
+        )
+        bug_details = {
+            module: bug_history_detail_by_module(repo_key, module, ref=head_sha)
+            for module in {f["module"] for f in changed_files}
         }
-        st.success(f"{len(changed_files)} arquivo(s) analisado(s) em {len(module_scores)} módulo(s).")
+        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        record_test_run(TEST_HISTORY_DB, test_results, repo_key=repo_key)
+        flakiness = flakiness_by_module(TEST_HISTORY_DB, repo_key=repo_key)
+        module_scores = score_modules(
+            changed_files, bug_history, test_health, incidents, flakiness,
+        )
+        release = score_release(module_scores)
+        release_name = f"{head_ref.strip()} @ {base_sha}..{head_sha}"
+        record_release_score(
+            RELEASE_HISTORY_DB, release_name, release["score"],
+            repo_key=repo_key,
+        )
+        st.session_state.analysis = {
+            "release_name": release_name, "repo_path": repo_key,
+            "changed_files": changed_files, "module_scores": module_scores,
+            "release": release, "test_results": test_results,
+            "test_health": test_health, "flakiness": flakiness,
+            "bug_details": bug_details, "incident_details": incident_details,
+        }
+        st.session_state.history_repo = repo_key
+    st.success(
+        f"{len(changed_files)} arquivo(s) analisado(s) "
+        f"em {len(module_scores)} módulo(s)."
+    )
+    if not changed_files:
+        st.info("Não há mudanças entre as referências selecionadas.")
 
-elif screen == "Visão Geral do Risco":
+
+def risk_overview(analysis):
     st.title("Visão geral do risco")
-    analysis = st.session_state.analysis
-    if not analysis:
-        st.info("Analise um release na tela 'Conectar Release' primeiro.")
-    else:
-        release = analysis["release"]
-        st.metric("Score do release", f"{release['score']:.0f}/100")
-        st.caption(f"Puxado pelo módulo: {release['top_module']}")
+    release = analysis["release"]
+    st.metric("Score do release", f"{release['score']:.0f}/100")
+    if not analysis["module_scores"]:
+        st.info("Nenhum módulo alterado neste intervalo.")
+        return
+    st.caption(f"Puxado pelo módulo: {release['top_module']}")
+    st.subheader("Composição do score (módulo de maior risco)")
+    for factor, value in release["factors"].items():
+        st.progress(min(value, 100) / 100, text=f"{factor}: {value:.0f}")
+    st.subheader("Módulos mais arriscados")
+    st.table([
+        {"Módulo": m["module"], "Score": m["score"]}
+        for m in analysis["module_scores"]
+    ])
+    if any(m["module"] not in analysis["test_health"]
+           for m in analysis["module_scores"]):
+        st.info(
+            "Há módulos sem testes correspondentes no relatório. A ausência "
+            "de dados não aumenta o score, mas não comprova que estão testados."
+        )
 
-        st.subheader("Composição do score (módulo de maior risco)")
-        for factor, value in release["factors"].items():
-            st.progress(min(value, 100) / 100, text=f"{factor}: {value:.0f}")
 
-        st.subheader("Módulos mais arriscados")
-        st.table([
-            {"Módulo": m["module"], "Score": m["score"]}
-            for m in analysis["module_scores"]
-        ])
-
-elif screen == "Roteiro de Teste Manual":
+def manual_guide(analysis):
     st.title("Roteiro de teste manual")
-    analysis = st.session_state.analysis
-    if not analysis:
-        st.info("Analise um release na tela 'Conectar Release' primeiro.")
-    else:
-        for m in analysis["module_scores"]:
-            card = build_module_card(m["module"], m["score"], m["factors"], analysis["changed_files"])
-            with st.container(border=True):
-                st.subheader(f"{card['module']} — risco {card['risk']}")
-                st.write("**O que mudou**")
-                st.write(card["o_que_mudou"])
-                st.write("**Por que testar isso**")
-                st.write(card["por_que_testar"])
-                st.write("**Cenários sugeridos**")
-                for cenario in card["cenarios"]:
-                    st.write(f"- {cenario}")
+    if not analysis["module_scores"]:
+        st.info("Nenhum módulo alterado para gerar um roteiro.")
+    for module in analysis["module_scores"]:
+        card = build_module_card(
+            module["module"], module["score"], module["factors"],
+            analysis["changed_files"],
+        )
+        with st.container(border=True):
+            st.subheader(f"{card['module']} — risco {card['risk']}")
+            st.write("**O que mudou**")
+            st.write(card["o_que_mudou"])
+            st.write("**Por que testar isso**")
+            st.write(card["por_que_testar"])
+            st.write("**Cenários sugeridos**")
+            for scenario in card["cenarios"]:
+                st.write(f"- {scenario}")
 
-elif screen == "Decisão de Publicação":
+
+def automated_suite(analysis):
+    st.title("Suíte automatizada priorizada")
+    ordered = prioritize_tests(
+        analysis["test_results"], analysis["module_scores"],
+        analysis["flakiness"],
+    )
+    st.caption(
+        "Ordem recomendada a partir do relatório importado. "
+        "A execução dos testes acontece no seu terminal ou CI."
+    )
+    if not ordered:
+        st.info("O relatório não contém testes.")
+        return
+    st.table([
+        {"Teste": t["name"], "Módulo": t["module"], "Status": t["status"],
+         "Tempo (s)": t["time"], "Flakiness do módulo (%)": t["flakiness"],
+         "Score do módulo": t["module_score"]}
+        for t in ordered
+    ])
+
+
+def module_detail(analysis):
+    st.title("Detalhe do módulo")
+    modules = [m["module"] for m in analysis["module_scores"]]
+    if not modules:
+        st.info("Nenhum módulo alterado para detalhar.")
+        return
+    selected = st.selectbox("Módulo", modules)
+    detail = build_module_detail(
+        selected, analysis["changed_files"],
+        analysis["bug_details"].get(selected, []),
+        analysis["incident_details"].get(selected, []),
+        analysis["test_health"], analysis["flakiness"],
+    )
+    st.subheader("O que mudou")
+    st.table([
+        {"Arquivo": f["path"], "+": f["lines_added"], "-": f["lines_removed"]}
+        for f in detail["files"]
+    ])
+    st.subheader("Histórico de bugs")
+    if detail["bugs"]:
+        st.table(detail["bugs"])
+    else:
+        st.caption("Nenhum bug histórico registrado para esse módulo.")
+    st.subheader("Incidentes em produção")
+    if detail["incidents"]:
+        st.table(detail["incidents"])
+    else:
+        st.caption("Nenhum detalhe de incidente informado para esse módulo.")
+    st.subheader("Saúde dos testes")
+    if selected in analysis["test_health"]:
+        st.write(
+            f"Taxa de aprovação na última rodada: {detail['test_health']:.0f}%"
+        )
+    else:
+        st.info("Sem testes correspondentes no relatório atual.")
+    st.write(f"Flakiness histórica: {detail['flakiness']:.0f}%")
+
+
+def publication_decision(analysis):
     st.title("Decisão de publicação")
-    analysis = st.session_state.analysis
-    if not analysis:
+    release = analysis["release"]
+    st.metric("Score atual", f"{release['score']:.0f}/100")
+    st.caption("Esta tela registra a decisão humana; não executa um deploy.")
+    decided_by = st.text_input("Seu nome").strip()
+    decision_key = f"{analysis['repo_path']} :: {analysis['release_name']}"
+    col1, col2 = st.columns(2)
+    publish = col1.button("Publicar mesmo assim", disabled=not decided_by)
+    cancel = col2.button("Cancelar publicação", disabled=not decided_by)
+    if publish or cancel:
+        decision = "publicar" if publish else "cancelar"
+        record_decision(
+            DECISIONS_DB, decision_key, release["score"], decided_by, decision,
+        )
+        st.success(f"Decisão registrada: {decision}.")
+    st.subheader("Registro (auditoria)")
+    history = get_decision_history(DECISIONS_DB, decision_key)
+    if history:
+        st.table(history)
+    else:
+        st.info("Nenhuma decisão registrada para este release.")
+
+
+def release_trends():
+    st.title("Histórico & tendências")
+    repo_path = st.text_input(
+        "Repositório do histórico",
+        value=st.session_state.get("history_repo", str(ROOT)),
+    )
+    repo_key = os.path.normcase(str(Path(repo_path).resolve()))
+    DATA_DIR.mkdir(parents=True, exist_ok=True)
+    history = get_release_history(RELEASE_HISTORY_DB, repo_key=repo_key)
+    if not history:
+        st.info("Ainda não há releases analisados para este repositório.")
+        return
+    st.table(history)
+    st.subheader("Evolução do score previsto")
+    st.line_chart([
+        {"Analisado em (UTC)": h["computed_at"], "Score": h["score"]}
+        for h in reversed(history)
+    ], x="Analisado em (UTC)", y="Score")
+    st.caption(
+        "Compare os scores com os resultados reais na tabela. "
+        "O score é um indicador relativo, não uma probabilidade de falha."
+    )
+    st.subheader("Marcar resultado real de um release")
+    release_to_mark = st.selectbox("Release", [h["release"] for h in history])
+    outcome = st.radio(
+        "Resultado", ["ok", "falhou"], horizontal=True, key="outcome",
+    )
+    if st.button("Registrar resultado"):
+        record_release_outcome(
+            RELEASE_HISTORY_DB, release_to_mark, outcome, repo_key=repo_key,
+        )
+        st.rerun()
+
+
+st.set_page_config(page_title="garantiu", layout="wide")
+if "analysis" not in st.session_state:
+    st.session_state.analysis = None
+screen = st.sidebar.radio("Tela", SCREENS)
+try:
+    if screen == SCREENS[0]:
+        connect_release()
+    elif screen == SCREENS[6]:
+        release_trends()
+    elif not st.session_state.analysis:
+        st.title(screen)
         st.info("Analise um release na tela 'Conectar Release' primeiro.")
     else:
-        release = analysis["release"]
-        st.metric("Score atual", f"{release['score']:.0f}/100")
-        decided_by = st.text_input("Seu nome")
-
-        col1, col2 = st.columns(2)
-        if col1.button("Publicar mesmo assim") and decided_by:
-            record_decision("garantiu.db", analysis["release_name"], release["score"], decided_by, "publicar")
-            st.success("Decisão registrada: publicar.")
-        if col2.button("Cancelar publicação") and decided_by:
-            record_decision("garantiu.db", analysis["release_name"], release["score"], decided_by, "cancelar")
-            st.warning("Decisão registrada: cancelar.")
-
-        st.subheader("Registro (auditoria)")
-        history = get_decision_history("garantiu.db", analysis["release_name"])
-        st.table(history)
+        renderers = {
+            SCREENS[1]: risk_overview, SCREENS[2]: manual_guide,
+            SCREENS[3]: automated_suite, SCREENS[4]: module_detail,
+            SCREENS[5]: publication_decision,
+        }
+        renderers[screen](st.session_state.analysis)
+except (OSError, ValueError, git.GitError, git.BadName,
+        git.BadObject, JUnitXmlError) as exc:
+    st.error(f"Não foi possível concluir a operação. Confira os dados: {exc}")
+except sqlite3.Error:
+    st.error(
+        "Não foi possível acessar ou gravar o histórico local. "
+        "Confira a permissão da pasta de dados e tente novamente."
+    )

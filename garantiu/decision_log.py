@@ -1,3 +1,4 @@
+import math
 import sqlite3
 from datetime import datetime, timezone
 
@@ -30,6 +31,10 @@ def record_decision(db_path: str, release: str, score: float, decided_by: str, d
     """
     if decision not in ("publicar", "cancelar"):
         raise ValueError("decision must be 'publicar' or 'cancelar'")
+    if not release.strip() or not decided_by.strip():
+        raise ValueError("Informe o release e o nome de quem decide.")
+    if not math.isfinite(score) or not 0 <= score <= 100:
+        raise ValueError("O score deve estar entre 0 e 100.")
 
     init_db(db_path)
     conn = sqlite3.connect(db_path)
@@ -37,7 +42,8 @@ def record_decision(db_path: str, release: str, score: float, decided_by: str, d
         cursor = conn.execute(
             "INSERT INTO decisions (release, score, decided_by, decision, decided_at) "
             "VALUES (?, ?, ?, ?, ?)",
-            (release, score, decided_by, decision, datetime.now(timezone.utc).isoformat()),
+            (release, score, decided_by.strip(), decision,
+             datetime.now(timezone.utc).isoformat()),
         )
         conn.commit()
         return cursor.lastrowid

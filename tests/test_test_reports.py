@@ -37,3 +37,24 @@ def test_health_by_module_computes_pass_rate(sample_junit_file):
     health = test_reports.test_health_by_module(results)
     assert health["checkout"] == 50.0
     assert health["auth"] == 100.0
+
+
+@pytest.mark.parametrize("xml", ["<broken", "<document/>"])
+def test_invalid_junit_is_reported(tmp_path, xml):
+    path = tmp_path / "bad.xml"
+    path.write_text(xml, encoding="utf-8")
+    with pytest.raises(ValueError):
+        parse_junit_report(str(path))
+
+
+def test_single_suite_with_missing_classname_error_and_skipped(tmp_path):
+    path = tmp_path / "suite.xml"
+    path.write_text(
+        '<testsuite name="suite">'
+        '<testcase name="a"><error message="broken"/></testcase>'
+        '<testcase name="b"><skipped/></testcase>'
+        '</testsuite>', encoding="utf-8",
+    )
+    results = parse_junit_report(str(path))
+    assert [r["status"] for r in results] == ["failed", "skipped"]
+    assert test_reports.test_health_by_module(results) == {"sem_modulo": 0.0}

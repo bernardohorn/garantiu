@@ -27,3 +27,9 @@ def test_record_and_fetch_decision_history(db_path):
 
 def test_get_decision_history_empty_for_unknown_release(db_path):
     assert get_decision_history(db_path, "release/nunca-existiu") == []
+
+
+def test_decision_requires_nonblank_author(db_path):
+    with pytest.raises(ValueError):
+        record_decision(db_path, "release", 50, "   ", "publicar")
+    assert get_decision_history(db_path, "release") == []

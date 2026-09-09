@@ -1,3 +1,5 @@
+from xml.etree import ElementTree
+
 from junitparser import JUnitXml, Skipped
 
 
@@ -6,7 +8,13 @@ def parse_junit_report(xml_path: str) -> list[dict]:
     Parses a JUnit XML report into a list of
     {"name": str, "classname": str, "status": "passed"|"failed"|"skipped", "time": float}.
     """
-    xml = JUnitXml.fromfile(xml_path)
+    try:
+        tree = ElementTree.parse(xml_path)
+    except ElementTree.ParseError as exc:
+        raise ValueError("Relatório JUnit XML inválido.") from exc
+    if tree.getroot().tag not in {"testsuite", "testsuites"}:
+        raise ValueError("O XML deve conter testsuite ou testsuites.")
+    xml = JUnitXml.fromfile(xml_path, parse_func=lambda _: tree)
     results = []
     for suite in xml:
         for case in suite:
@@ -18,8 +26,8 @@ def parse_junit_report(xml_path: str) -> list[dict]:
             else:
                 status = "passed"
             results.append({
-                "name": case.name,
-                "classname": case.classname,
+                "name": case.name or "sem_nome",
+                "classname": case.classname or "sem_modulo",
                 "status": status,
                 "time": case.time or 0.0,
             })

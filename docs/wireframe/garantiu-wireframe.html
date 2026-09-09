@@ -442,6 +442,40 @@
   .breadcrumb { font-family: var(--mono); font-size: 11px; color: var(--ink-soft); margin-bottom: 14px; }
   .breadcrumb .cur { color: var(--ink); }
 
+  /* ---------- QA summary card ---------- */
+  .qa-card {
+    border: 1px solid var(--line-soft);
+    border-radius: 8px;
+    padding: 18px 20px;
+    background: var(--panel-2);
+  }
+  .qa-card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 14px;
+    padding-bottom: 12px;
+    border-bottom: 1px solid var(--line-soft);
+  }
+  .qa-card-title { font-size: 14.5px; font-weight: 600; }
+  .qa-field { margin-bottom: 12px; }
+  .qa-field:last-of-type { margin-bottom: 0; }
+  .qa-text { margin: 0; font-size: 13px; line-height: 1.55; max-width: 62ch; }
+  .qa-list { margin: 0; padding-left: 18px; font-size: 13px; line-height: 1.7; }
+  .dev-note {
+    margin-top: 14px;
+    padding: 10px 14px;
+    border-left: 3px solid var(--accent);
+    background: var(--panel);
+    font-size: 12.5px;
+    line-height: 1.6;
+    color: var(--ink-soft);
+    border-radius: 0 6px 6px 0;
+  }
+  .dev-note-author { font-family: var(--mono); font-weight: 600; color: var(--ink); }
+  .dev-note.empty { border-left-color: var(--line); font-style: italic; }
+
   ::selection { background: var(--accent); color: var(--accent-ink); }
 
   @media (max-width: 880px) {
@@ -564,8 +598,94 @@
         </div>
       </section>
 
-      <!-- 3. Lista priorizada de testes -->
+      <!-- 3. Resumo para QA -->
       <section class="screen" id="screen-3" hidden>
+        <h2 class="scr-title">Resumo para QA — release/2026.09</h2>
+        <p class="scr-sub">O impacto explicado em português simples — a "conta" que hoje o dev faz de cabeça e explica na mão.</p>
+
+        <div class="row" style="margin-bottom:18px;">
+          <span class="placeholder-text">3 áreas mudaram neste release</span>
+          <span class="chip hi">2 de risco alto</span>
+          <span class="chip mid">1 de risco médio</span>
+        </div>
+
+        <div class="stack" style="gap:16px;">
+          <div class="qa-card">
+            <div class="qa-card-head">
+              <span class="qa-card-title">Pagamento no checkout</span>
+              <span class="chip hi">risco alto</span>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">O que mudou</label>
+              <p class="qa-text">Mudamos como o parcelamento é calculado e trocamos parte da integração com o gateway de pagamento.</p>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">Por que testar isso</label>
+              <p class="qa-text">É a parte que mexe direto com o dinheiro do cliente — qualquer erro aqui vira reclamação ou prejuízo na hora.</p>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">Cenários sugeridos</label>
+              <ul class="qa-list">
+                <li>Pagar com cartão e simular recusa</li>
+                <li>Parcelar em 12x e conferir o valor de cada parcela</li>
+                <li>Cancelar um pagamento no meio do processo</li>
+              </ul>
+            </div>
+            <div class="dev-note">
+              <span class="dev-note-author">m.silva</span> — mudei a regra de arredondamento do parcelamento, testem valores quebrados tipo R$ 99,90 em 7x.
+            </div>
+          </div>
+
+          <div class="qa-card">
+            <div class="qa-card-head">
+              <span class="qa-card-title">Sessão de login</span>
+              <span class="chip hi">risco alto</span>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">O que mudou</label>
+              <p class="qa-text">Ajustamos o tempo de expiração do token de sessão.</p>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">Por que testar isso</label>
+              <p class="qa-text">Se expirar cedo demais, o usuário é deslogado no meio de uma compra; se não expirar, é risco de segurança.</p>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">Cenários sugeridos</label>
+              <ul class="qa-list">
+                <li>Ficar logado e parado por mais de 30 minutos, depois tentar comprar</li>
+                <li>Trocar de aba ou dispositivo com a mesma conta</li>
+              </ul>
+            </div>
+            <div class="dev-note empty">Nenhuma nota deixada ainda — peça pro dev responsável comentar.</div>
+          </div>
+
+          <div class="qa-card">
+            <div class="qa-card-head">
+              <span class="qa-card-title">Email de confirmação de pedido</span>
+              <span class="chip mid">risco médio</span>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">O que mudou</label>
+              <p class="qa-text">Trocamos o texto e o gatilho do email de confirmação de pedido.</p>
+            </div>
+            <div class="qa-field">
+              <label class="wf-label">Cenários sugeridos</label>
+              <ul class="qa-list">
+                <li>Fazer um pedido e conferir se o email chega</li>
+                <li>Conferir se o link dentro do email funciona</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <div class="note" style="margin-top:20px;">
+          <b>Objetivo da tela:</b> hoje essa explicação só existe numa conversa entre dev e QA — vira artefato que fica registrado e não depende de quem está por perto pra perguntar.
+          <div class="open"><span>Em aberto</span> — confirmar com QAs reais se essa é a linguagem certa, e se "nota do dev" é preenchida na prática ou vira campo vazio ignorado.</div>
+        </div>
+      </section>
+
+      <!-- 4. Lista priorizada de testes -->
+      <section class="screen" id="screen-4" hidden>
         <h2 class="scr-title">Testes priorizados</h2>
         <p class="scr-sub">Não é "rodar tudo" — é rodar o que cobre mais risco primeiro.</p>
 
@@ -594,8 +714,8 @@
         </div>
       </section>
 
-      <!-- 4. Detalhe do módulo -->
-      <section class="screen" id="screen-4" hidden>
+      <!-- 5. Detalhe do módulo -->
+      <section class="screen" id="screen-5" hidden>
         <div class="breadcrumb">Visão geral <span style="opacity:.5;">/</span> <span class="cur">pagamentos/checkout</span></div>
         <h2 class="scr-title">pagamentos/checkout <span class="chip hi" style="margin-left:6px;">score 89</span></h2>
         <p class="scr-sub">Por que este módulo está no topo do risco.</p>
@@ -638,8 +758,8 @@
         </div>
       </section>
 
-      <!-- 5. Decisão de publicação -->
-      <section class="screen" id="screen-5" hidden>
+      <!-- 6. Decisão de publicação -->
+      <section class="screen" id="screen-6" hidden>
         <h2 class="scr-title">Decisão de publicação</h2>
         <p class="scr-sub">Fecha o loop: publica ou não, e fica registrado com base em quê.</p>
 
@@ -684,8 +804,8 @@
         </div>
       </section>
 
-      <!-- 6. Histórico e tendências -->
-      <section class="screen" id="screen-6" hidden>
+      <!-- 7. Histórico e tendências -->
+      <section class="screen" id="screen-7" hidden>
         <h2 class="scr-title">Histórico &amp; tendências</h2>
         <p class="scr-sub">O score só ganha confiança se acertar ao longo do tempo.</p>
 
@@ -726,10 +846,11 @@
   var SCREENS = [
     { id: "screen-1", n: "01", t: "Conectar release", d: "Repositório, branch, intervalo" },
     { id: "screen-2", n: "02", t: "Visão geral do risco", d: "Score + módulos críticos" },
-    { id: "screen-3", n: "03", t: "Testes priorizados", d: "O que rodar primeiro" },
-    { id: "screen-4", n: "04", t: "Detalhe do módulo", d: "Por que está arriscado" },
-    { id: "screen-5", n: "05", t: "Decisão de publicação", d: "Publicar, cancelar, registrar" },
-    { id: "screen-6", n: "06", t: "Histórico & tendências", d: "Previsto x aconteceu" }
+    { id: "screen-3", n: "03", t: "Resumo para QA", d: "Impacto em linguagem simples" },
+    { id: "screen-4", n: "04", t: "Testes priorizados", d: "O que rodar primeiro" },
+    { id: "screen-5", n: "05", t: "Detalhe do módulo", d: "Por que está arriscado" },
+    { id: "screen-6", n: "06", t: "Decisão de publicação", d: "Publicar, cancelar, registrar" },
+    { id: "screen-7", n: "07", t: "Histórico & tendências", d: "Previsto x aconteceu" }
   ];
 
   var stepsEl = document.getElementById("steps");

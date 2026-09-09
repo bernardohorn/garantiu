@@ -331,7 +331,11 @@ def release_trends():
         st.rerun()
 
 
-st.set_page_config(page_title="garantiu", layout="wide")
+st.set_page_config(page_title="garantiu", page_icon="🛡️", layout="wide")
+st.markdown(
+    "<style>div.block-container{padding-top:2rem;}</style>",
+    unsafe_allow_html=True,
+)
 if "analysis" not in st.session_state:
     st.session_state.analysis = None
 screen = st.sidebar.radio("Tela", SCREENS)

@@ -494,7 +494,7 @@
     </div>
 
     <div>
-      <p class="rail-label">Fluxo (6 telas)</p>
+      <p class="rail-label">Fluxo (7 telas)</p>
       <nav class="steps" id="steps" aria-label="Telas do wireframe"></nav>
     </div>
 
@@ -575,7 +575,7 @@
             <div class="factor-row"><span class="label">Histórico de bugs</span><div class="factor-track"><div class="factor-fill" style="width:61%;"></div></div><span class="val">61</span></div>
             <div class="factor-row"><span class="label">Saúde dos testes</span><div class="factor-track"><div class="factor-fill" style="width:70%;"></div></div><span class="val">70</span></div>
             <div class="factor-row"><span class="label">Incidentes anteriores</span><div class="factor-track"><div class="factor-fill" style="width:55%;"></div></div><span class="val">55</span></div>
-            <span class="btn ghost" style="align-self:flex-start; margin-top:6px;">Ver testes recomendados →</span>
+            <span class="btn ghost" style="align-self:flex-start; margin-top:6px;">Ver o que testar →</span>
           </div>
 
           <div>
@@ -598,10 +598,10 @@
         </div>
       </section>
 
-      <!-- 3. Resumo para QA -->
+      <!-- 3. Roteiro de teste manual -->
       <section class="screen" id="screen-3" hidden>
-        <h2 class="scr-title">Resumo para QA — release/2026.09</h2>
-        <p class="scr-sub">O impacto explicado em português simples — a "conta" que hoje o dev faz de cabeça e explica na mão.</p>
+        <h2 class="scr-title">Roteiro de teste manual — release/2026.09</h2>
+        <p class="scr-sub">O que só dá pra pegar testando na mão, explicado em português simples — pra quem for testar, com ou sem QA dedicado.</p>
 
         <div class="row" style="margin-bottom:18px;">
           <span class="placeholder-text">3 áreas mudaram neste release</span>
@@ -679,15 +679,15 @@
         </div>
 
         <div class="note" style="margin-top:20px;">
-          <b>Objetivo da tela:</b> hoje essa explicação só existe numa conversa entre dev e QA — vira artefato que fica registrado e não depende de quem está por perto pra perguntar.
-          <div class="open"><span>Em aberto</span> — confirmar com QAs reais se essa é a linguagem certa, e se "nota do dev" é preenchida na prática ou vira campo vazio ignorado.</div>
+          <b>Objetivo da tela:</b> automação cobre o previsível (login, cadastro, integração técnica) — interface, UX e cenário complexo continuam dependendo de teste manual em qualquer empresa. Essa tela é o direcionamento pra esse esforço manual, que hoje só existe numa conversa informal entre dev e quem for testar.
+          <div class="open"><span>Em aberto</span> — validar a linguagem específica com quem testa manualmente no dia a dia, e se "nota do dev" é preenchida na prática ou vira campo vazio ignorado.</div>
         </div>
       </section>
 
-      <!-- 4. Lista priorizada de testes -->
+      <!-- 4. Suíte automatizada priorizada -->
       <section class="screen" id="screen-4" hidden>
-        <h2 class="scr-title">Testes priorizados</h2>
-        <p class="scr-sub">Não é "rodar tudo" — é rodar o que cobre mais risco primeiro.</p>
+        <h2 class="scr-title">Suíte automatizada priorizada</h2>
+        <p class="scr-sub">O que já é automatizado, ordenado por risco. O que não dá pra automatizar está no roteiro de teste manual (tela anterior).</p>
 
         <div class="row" style="justify-content:space-between; margin-bottom:14px;">
           <div class="row">
@@ -709,7 +709,7 @@
         </table>
 
         <div class="note">
-          <b>Objetivo da tela:</b> transformar o score em ação — uma ordem clara do que rodar, e sinalizar teste flaky em vez de deixar o time ignorar silenciosamente.
+          <b>Objetivo da tela:</b> a parte que já é automatizada não é o gargalo — só precisa rodar na ordem certa e sinalizar teste flaky em vez de deixar o time ignorar silenciosamente. O esforço de verdade está no roteiro manual (tela anterior).
           <div class="open"><span>Em aberto</span> — "contribuição ao risco" por teste precisa de um cálculo real; hoje é conceito.</div>
         </div>
       </section>
@@ -846,8 +846,8 @@
   var SCREENS = [
     { id: "screen-1", n: "01", t: "Conectar release", d: "Repositório, branch, intervalo" },
     { id: "screen-2", n: "02", t: "Visão geral do risco", d: "Score + módulos críticos" },
-    { id: "screen-3", n: "03", t: "Resumo para QA", d: "Impacto em linguagem simples" },
-    { id: "screen-4", n: "04", t: "Testes priorizados", d: "O que rodar primeiro" },
+    { id: "screen-3", n: "03", t: "Roteiro de teste manual", d: "Onde focar, com ou sem QA" },
+    { id: "screen-4", n: "04", t: "Suíte automatizada", d: "O que já roda sozinho" },
     { id: "screen-5", n: "05", t: "Detalhe do módulo", d: "Por que está arriscado" },
     { id: "screen-6", n: "06", t: "Decisão de publicação", d: "Publicar, cancelar, registrar" },
     { id: "screen-7", n: "07", t: "Histórico & tendências", d: "Previsto x aconteceu" }

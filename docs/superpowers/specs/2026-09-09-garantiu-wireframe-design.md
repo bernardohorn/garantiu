@@ -8,14 +8,38 @@ World Quality Report, CISQ, caso CrowdStrike). Este documento cobre a Etapa 2: d
 um conceito de solução e um wireframe de baixa fidelidade para apresentar ainda no dia 1,
 explicitamente sujeito a mudanças nos dias 2 e 3.
 
-**Problema (Etapa 1):** Times de desenvolvimento de software enfrentam dificuldade para
-decidir o que testar primeiro e qual o risco real de publicar quando muitas alterações se
-acumulam antes de um release, causando falhas em produção, retrabalho e perda de confiança
-nos próprios testes.
+**Problema (revisado — Etapa 2, validado com dados):** Times de desenvolvimento de
+software — com ou sem QA dedicado — enfrentam dificuldade para saber onde concentrar o
+teste manual (que continua indispensável para interface, UX e cenários complexos, mesmo em
+empresas com automação madura) quando muitas alterações se acumulam antes de um release,
+causando teste manual mal direcionado, bugs de interface escapando para produção e
+retrabalho sob prazo apertado.
+
+**Como poderíamos:** direcionar o esforço de teste manual para onde o risco realmente está,
+para times que precisam publicar um release com prazo apertado e mudanças acumuladas, de
+forma que o teste manual cubra o que importa sem precisar aumentar o volume de teste
+manual?
+
+*Outras versões da pergunta:*
+- Como poderíamos ajudar quem testa manualmente a confiar que cobriu os pontos certos, mesmo sob prazo curto?
+- Como poderíamos usar o que já é automatizado para apontar exatamente onde o teste manual precisa entrar?
+
+<details>
+<summary>Versão original (Etapa 1, hipótese antes da validação)</summary>
+
+**Problema:** Times de desenvolvimento de software enfrentam dificuldade para decidir o
+que testar primeiro e qual o risco real de publicar quando muitas alterações se acumulam
+antes de um release, causando falhas em produção, retrabalho e perda de confiança nos
+próprios testes.
 
 **Como poderíamos:** dar visibilidade sobre onde está o risco de cada release para times
 que acumulam muitas alterações antes de publicar, de forma que saibam o que testar
 primeiro e publiquem com mais confiança sem precisar rodar mais testes?
+
+A versão original tratava "o que testar" de forma genérica (automatizado + manual). A
+validação (ver seção abaixo) mostrou que o gargalo real é especificamente o **teste
+manual** — automação já cobre bem o previsível, e ninguém espera que isso mude.
+</details>
 
 ## Conceito
 
@@ -76,6 +100,30 @@ Isso não muda o problema/HMW da Etapa 1, mas amplia o público de "times de
 desenvolvimento" para deixar explícito que inclui QA como consumidor do impacto, não só
 quem decide publicar. Vale confirmar isso nas entrevistas de validação.
 
+## Validação (Etapa 2) — o que mudou o problema
+
+Fonte: relatório de entrevista/formulário com ~9-10 profissionais de diversas empresas
+(`docs/Grupo 1 - 2° Hackathon ifc - Garantiu.pdf`), papéis variados (dev, QA, liderança
+técnica, produto, DevOps, suporte, CTO). Achados que sustentam a reformulação do
+problema:
+
+- **Automação tem um teto estrutural, não de maturidade** (Q8): testes automatizados
+  cobrem fluxos previsíveis e repetitivos (unitários, integrações técnicas, login,
+  cadastro). Interface, testes gráficos, UX, cenários complexos e testes exploratórios
+  seguem dependendo de execução manual — em todas as empresas representadas na amostra.
+- **Mesmo esperando ganho grande com automação, ninguém espera eliminar o manual** (Q10):
+  estimativas de ganho de produtividade variam de 30–40% a 80–100%, mas com a ressalva
+  unânime de que revisão humana e teste exploratório manual continuam necessários.
+- **A dificuldade de decidir o que testar é frequente/moderada** (Q6), com causas que
+  batem com a Etapa 1 (efeito cascata de mudanças, módulos interligados, falta de tempo)
+  e uma causa nova: **falta de equipe dedicada a testes** — reforça por que a solução não
+  pode presumir QA dedicado.
+- **Prazo apertado corta testes sem critério sistemático** (Q7): sob pressão, a equipe
+  prioriza "o que dá tempo", não necessariamente o que é mais arriscado.
+- **A decisão de publicar já depende de um resumo informal que alguém sobe pra quem
+  decide** (Q9) — validando que a tela de Decisão de Publicação (tela 6) formaliza algo
+  que já acontece na prática, não introduz um passo novo.
+
 ## Fidelidade e formato de entrega
 
 Wireframe de **baixa fidelidade, tons de cinza** — caixas, texto placeholder, sem
@@ -92,7 +140,8 @@ telas), sem dependências externas, para uso direto no pitch do dia 1.
 
 ## Próximos passos (dias 2–3)
 
-- Validar o conceito com as ~3 entrevistas planejadas no roteiro da Etapa 1.
-- Ajustar telas/score conforme feedback.
+- Refletir a reformulação do problema no tom/copy do wireframe: reduzir a ênfase em
+  "automatizar mais" e reforçar "direcionar o teste manual" (telas 3 e 4 principalmente).
+- Ajustar telas/score conforme o restante do relatório de validação for analisado.
 - Se o hackathon pedir protótipo funcional, decidir stack nesse momento (fora do escopo
   deste documento).

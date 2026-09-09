@@ -8,6 +8,13 @@ from tests.conftest import init_repo
 from tests.test_repository_source import remote_fixture
 
 
+def select_fixture_reports(at):
+    root = Path(__file__).resolve().parents[1] / "sample_data"
+    at.text_input[3].set_value(str(root / "sample_junit.xml"))
+    at.text_input[4].set_value(str(root / "incidents.csv"))
+    at.text_input[5].set_value(str(root / "incident_details.csv"))
+
+
 @pytest.fixture(autouse=True)
 def isolated_data(tmp_path, monkeypatch):
     monkeypatch.setenv("GARANTIU_DATA_DIR", str(tmp_path / "data"))
@@ -28,7 +35,8 @@ def analyzed_app(tmp_path):
     repo.index.commit("fix: gateway")
     repo.close()
     at = AppTest.from_file("../app.py", default_timeout=15).run()
-    at.text_input[0].set_value(str(repo_path))
+    at.text_input[0].set_value(str(repo_path)).run()
+    select_fixture_reports(at)
     at.button[0].click().run()
     assert not at.exception
     assert not at.error
@@ -57,9 +65,8 @@ def test_full_pipeline_runs_end_to_end_and_populates_risk_overview():
     at.run()
     assert not at.exception
 
-    # Default inputs on "Conectar Release" already point at this repo
-    # (repo_path=".") and its real HEAD~1..HEAD diff, plus the real sample
-    # JUnit/incidents files. Just click the analysis button.
+    # Exercise explicit report ingestion; sample files are never defaults.
+    select_fixture_reports(at)
     at.button[0].click().run()
     assert not at.exception
     assert at.session_state.analysis is not None
@@ -210,6 +217,54 @@ def test_failed_reanalysis_clears_stale_analysis(analyzed_app):
     assert not at.exception
     assert at.error
     assert at.session_state.analysis is None
+
+
+def test_default_analysis_has_no_fictitious_test_results(tmp_path):
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    assert all(not field.value for field in at.text_input[3:6])
+    at.button[0].click().run()
+    assert not at.exception
+    assert not at.error
+    assert at.session_state.analysis["test_results"] == []
+    assert at.session_state.analysis["flakiness"] == {}
+    assert not (tmp_path / "data/garantiu_test_history.db").exists()
+    at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
+    assert not at.table
+    assert "Nenhum relatório" in at.info[0].value
+
+
+def test_switching_repository_clears_report_and_stale_analysis(analyzed_app):
+    at = analyzed_app
+    assert at.text_input[3].value
+    at.text_input[0].set_value("https://github.com/other/project").run()
+    assert at.session_state.analysis is None
+    assert not at.text_input[3].value
+    assert not at.text_input[4].value
+    at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
+    assert not at.table
+
+
+def test_report_in_github_commit_populates_actual_suite(remote_fixture):
+    upstream, _ = remote_fixture
+    from git import Repo
+    with Repo(upstream) as repo:
+        (upstream / "results.xml").write_text(
+            '<testsuite><testcase classname="checkout.pay" name="test_real" '
+            'time="0.25"><failure/></testcase></testsuite>', encoding="utf-8",
+        )
+        repo.index.add(["results.xml"])
+        repo.index.commit("test report")
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input[0].set_value("https://github.com/owner/project").run()
+    at.text_input[1].set_value("v1")
+    at.text_input[3].set_value("repo:results.xml")
+    at.button[0].click().run()
+    assert not at.exception
+    assert not at.error
+    at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
+    assert at.table[0].value["Teste"].tolist() == ["test_real"]
+    assert at.table[0].value.iloc[0]["Status"] == "failed"
+    assert any("repo:results.xml" in caption.value for caption in at.caption)
 
 
 def test_github_analysis_all_screens_and_persistent_url_history(remote_fixture):

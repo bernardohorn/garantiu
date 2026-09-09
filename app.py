@@ -21,7 +21,7 @@ from garantiu.scoring import score_modules, score_release
 from garantiu.repository_source import prepare_repository, repository_key
 from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
-from garantiu.test_reports import parse_junit_report, test_health_by_module
+from garantiu.test_reports import load_project_test_report, test_health_by_module
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("GARANTIU_DATA_DIR", ROOT))
@@ -37,30 +37,35 @@ SCREENS = [
 
 def connect_release():
     st.title("Conectar release")
-    st.text_input(
+    repo_input = st.text_input(
         "Pasta local ou link do GitHub", value=".", key="repo_path",
         help="Ex.: C:\\Projetos\\meu-sistema ou https://github.com/usuario/projeto",
+        on_change=lambda: st.session_state.update(analysis=None),
     )
     base_ref = st.text_input("Comparar desde", value="HEAD~1")
     head_ref = st.text_input("Branch do release", value="HEAD")
     junit_path = st.text_input(
         "Relatório de testes (JUnit XML)",
-        value=str(ROOT / "sample_data/sample_junit.xml"),
+        value="", key=f"junit_path:{repo_input}",
+        help="Informe um arquivo local ou repo:reports/junit.xml para ler "
+             "um XML do commit selecionado. Deixe vazio se não houver relatório.",
     )
     incidents_path = st.text_input(
         "Arquivo de incidentes (CSV)",
-        value=str(ROOT / "sample_data/incidents.csv"),
+        value="", key=f"incidents_path:{repo_input}",
     )
     incident_details_path = st.text_input(
         "Arquivo de detalhe de incidentes (CSV, opcional)",
-        value=str(ROOT / "sample_data/incident_details.csv"),
+        value="", key=f"incident_details_path:{repo_input}",
     )
     st.caption(
         "Links do GitHub são baixados a cada análise. Use a URL da raiz do "
         "repositório e informe a branch nos campos acima. "
-        "JUnit e CSV continuam sendo arquivos locais. "
-        "Os arquivos sample_data são exemplos. Para analisar seu produto, "
-        "use os relatórios e incidentes correspondentes ao repositório. "
+        "O link GitHub fornece código e histórico Git, não resultados de testes. "
+        "Informe o JUnit produzido pelos testes desse projeto: arquivo local "
+        "ou repo:caminho/do/relatorio.xml no commit analisado. "
+        "CSV é opcional e continua local. Sem essas fontes, a análise usa "
+        "somente os dados disponíveis, sem resultados de exemplo. "
         "Cada análise registra uma rodada de testes; use relatórios de "
         "execuções distintas para acompanhar a flakiness."
     )
@@ -76,6 +81,9 @@ def connect_release():
             with git.Repo(source.path) as repo:
                 base_sha = repo.commit(base_ref.strip()).hexsha
                 head_sha = repo.commit(head_ref.strip()).hexsha
+                test_results = load_project_test_report(
+                    repo, head_sha, junit_path,
+                )
             changed_files = get_changed_files(source.path, base_sha, head_sha)
             bug_history = build_bug_history(source.path, ref=head_sha)
             bug_details = {
@@ -84,16 +92,19 @@ def connect_release():
                 )
                 for module in {f["module"] for f in changed_files}
             }
-        test_results = parse_junit_report(junit_path.strip())
         test_health = test_health_by_module(test_results)
-        incidents = load_incidents(incidents_path.strip())
+        incidents = load_incidents(incidents_path.strip()) if incidents_path.strip() else {}
         incident_details = (
             load_incident_details(incident_details_path.strip())
             if incident_details_path.strip() else {}
         )
         DATA_DIR.mkdir(parents=True, exist_ok=True)
-        record_test_run(TEST_HISTORY_DB, test_results, repo_key=repo_key)
-        flakiness = flakiness_by_module(TEST_HISTORY_DB, repo_key=repo_key)
+        if test_results:
+            record_test_run(TEST_HISTORY_DB, test_results, repo_key=repo_key)
+        flakiness = (
+            flakiness_by_module(TEST_HISTORY_DB, repo_key=repo_key)
+            if test_results else {}
+        )
         module_scores = score_modules(
             changed_files, bug_history, test_health, incidents, flakiness,
         )
@@ -107,6 +118,7 @@ def connect_release():
             "release_name": release_name, "repo_path": repo_key,
             "changed_files": changed_files, "module_scores": module_scores,
             "release": release, "test_results": test_results,
+            "junit_source": junit_path.strip(),
             "test_health": test_health, "flakiness": flakiness,
             "bug_details": bug_details, "incident_details": incident_details,
         }
@@ -178,6 +190,21 @@ def manual_guide(analysis):
 
 def automated_suite(analysis):
     st.title("Suíte automatizada priorizada")
+    st.caption(f"Repositório analisado: {analysis['repo_path']}")
+    st.caption(f"Release: {analysis['release_name']}")
+    if not analysis.get("junit_source"):
+        st.info(
+            "Nenhum relatório de testes foi fornecido para este projeto. "
+            "Em Conectar Release, informe um JUnit local ou "
+            "repo:reports/junit.xml e clique em Analisar mudanças."
+        )
+        st.caption(
+            "Gere o relatório no seu terminal ou CI. Para projetos com pytest: "
+            "python -m pytest --junitxml=relatorio.xml. "
+            "O Garantiu não executa automaticamente o código do repositório."
+        )
+        return
+    st.caption(f"Relatório utilizado: {analysis['junit_source']}")
     ordered = prioritize_tests(
         analysis["test_results"], analysis["module_scores"],
         analysis["flakiness"],
@@ -189,10 +216,21 @@ def automated_suite(analysis):
     if not ordered:
         st.info("O relatório não contém testes.")
         return
+    changed_modules = {m["module"] for m in analysis["module_scores"]}
+    unmatched = sorted({t["module"] for t in ordered} - changed_modules)
+    if unmatched:
+        st.warning(
+            "Há testes sem associação aos módulos alterados: "
+            + ", ".join(unmatched)
+            + ". Podem ser de áreas não alteradas ou usar nomes diferentes. "
+            "Eles não recebem prioridade por risco. Confira o relatório "
+            "e a correspondência entre classname e as pastas do projeto."
+        )
     st.table([
         {"Teste": t["name"], "Módulo": t["module"], "Status": t["status"],
          "Tempo (s)": t["time"], "Flakiness do módulo (%)": t["flakiness"],
-         "Score do módulo": t["module_score"]}
+         "Score do módulo": (t["module_score"]
+                             if t["module"] in changed_modules else None)}
         for t in ordered
     ])
 

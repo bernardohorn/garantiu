@@ -1,6 +1,28 @@
 from xml.etree import ElementTree
+from io import BytesIO
+from pathlib import PurePosixPath
 
 from junitparser import JUnitXml, Skipped
+
+
+def load_project_test_report(repo, ref: str, location: str) -> list[dict]:
+    """Read an explicit local JUnit or repo:path from the analyzed commit."""
+    location = location.strip()
+    if not location:
+        return []
+    if not location.startswith("repo:"):
+        return parse_junit_report(location)
+    path = location[5:]
+    parts = PurePosixPath(path)
+    if not path or parts.is_absolute() or ".." in parts.parts or "\\" in path:
+        raise ValueError("Use repo:pasta/relatorio.xml, relativo à raiz do projeto.")
+    try:
+        blob = repo.commit(ref).tree / path
+    except KeyError as exc:
+        raise ValueError("Relatório não encontrado no commit selecionado.") from exc
+    if blob.type != "blob" or blob.mode == 0o120000:
+        raise ValueError("O relatório no repositório deve ser um arquivo XML.")
+    return parse_junit_report(BytesIO(blob.data_stream.read()))
 
 
 def parse_junit_report(xml_path: str) -> list[dict]:

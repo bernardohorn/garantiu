@@ -2,6 +2,8 @@ import pytest
 
 from garantiu import test_reports
 from garantiu.test_reports import parse_junit_report
+from garantiu.test_reports import load_project_test_report
+from tests.conftest import init_repo
 
 SAMPLE_XML = """<?xml version="1.0" encoding="utf-8"?>
 <testsuites>
@@ -58,3 +60,20 @@ def test_single_suite_with_missing_classname_error_and_skipped(tmp_path):
     results = parse_junit_report(str(path))
     assert [r["status"] for r in results] == ["failed", "skipped"]
     assert test_reports.test_health_by_module(results) == {"sem_modulo": 0.0}
+
+
+def test_repository_report_reads_selected_commit_not_worktree(tmp_path):
+    with init_repo(tmp_path) as repo:
+        report = tmp_path / "results.xml"
+        report.write_text('<testsuite><testcase name="original"/></testsuite>')
+        repo.index.add(["results.xml"])
+        sha = repo.index.commit("report").hexsha
+        report.write_text('<testsuite><testcase name="changed"/></testsuite>')
+        repo.index.add(["results.xml"])
+        repo.index.commit("next report")
+        assert load_project_test_report(repo, sha, "repo:results.xml")[0]["name"] == "original"
+        assert load_project_test_report(repo, "HEAD", "repo:results.xml")[0]["name"] == "changed"
+        assert load_project_test_report(repo, sha, "") == []
+        for location in ["repo:missing.xml", "repo:../results.xml", "repo:/results.xml"]:
+            with pytest.raises(ValueError):
+                load_project_test_report(repo, sha, location)

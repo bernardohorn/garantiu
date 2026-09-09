@@ -1,5 +1,7 @@
 # garantiu
 
+[![tests](https://github.com/bernardohorn/garantiu/actions/workflows/tests.yml/badge.svg)](https://github.com/bernardohorn/garantiu/actions/workflows/tests.yml)
+
 Dashboard local de risco de releases, implementado em Python e Streamlit.
 Cruza mudanças do Git, resultados JUnit e incidentes CSV para priorizar
 testes manuais e automatizados e registrar decisões humanas.
@@ -28,10 +30,13 @@ Abra `http://localhost:8501`; encerre o servidor com `Ctrl+C`.
    existentes (branch, tag ou commit). `.` e `HEAD~1` / `HEAD` permitem uma
    primeira análise deste repositório, que precisa ter pelo menos dois commits.
    O diff considera os commits selecionados, não mudanças sem commit.
-2. **Visão Geral do Risco:** veja o score 0–100, seus quatro fatores e os
-   módulos alterados, ordenados por risco.
-3. **Roteiro de Teste Manual:** veja o que mudou, o motivo da prioridade e
-   três cenários sugeridos por módulo.
+2. **Visão Geral do Risco:** veja o score 0–100, seus quatro fatores, os
+   módulos alterados ordenados por risco e, quando houver mais de um módulo em
+   risco alto/médio além do que define o score, um aviso de que o risco está
+   espalhado, não concentrado só no módulo que define o score do release.
+3. **Roteiro de Teste Manual:** veja o que mudou, o motivo da prioridade,
+   três cenários sugeridos por módulo e deixe uma nota curta pro QA (campo
+   opcional, válido só durante a sessão atual — não é salvo no histórico).
 4. **Suíte Automatizada Priorizada:** consulte os testes do relatório em ordem
    de risco, status, flakiness e nome. A tela não executa comandos do projeto.
 5. **Detalhe do Módulo:** consulte arquivos, correções de bugs, incidentes,
@@ -121,3 +126,13 @@ decisão, resultado, repetição com status diferentes, entradas inválidas e
 estados vazios. O parser utiliza a interface documentada do
 [junitparser](https://junitparser.readthedocs.io/en/stable/api_generated/junitparser.html).
 O mapeamento da entrega está em `docs/implementacao-concluida.md`.
+
+Para ver a cobertura de linhas por módulo:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q --cov=garantiu --cov-report=term-missing
+```
+
+Um workflow do GitHub Actions (`.github/workflows/tests.yml`) roda essa mesma
+suíte a cada push/PR para `main`; não há gate de cobertura mínima, é só
+visibilidade no log do CI.

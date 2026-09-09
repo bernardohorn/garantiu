@@ -1,4 +1,4 @@
-RISK_THRESHOLDS = {"alto": 70, "medio": 40}
+from garantiu.scoring import RISK_THRESHOLDS, risk_label  # noqa: F401  (re-exported)
 
 FACTOR_MESSAGES = {
     "complexidade": (
@@ -23,15 +23,6 @@ GENERIC_SCENARIOS = [
     "Testar {module} com uma entrada inválida ou inesperada",
     "Testar o comportamento de {module} depois de uma falha (timeout, erro de rede, etc.)",
 ]
-
-
-def risk_label(score: float) -> str:
-    """Returns 'alto' if score >= 70, 'medio' if score >= 40, else 'baixo'."""
-    if score >= RISK_THRESHOLDS["alto"]:
-        return "alto"
-    if score >= RISK_THRESHOLDS["medio"]:
-        return "medio"
-    return "baixo"
 
 
 def build_module_card(module: str, score: float, factors: dict, changed_files: list) -> dict:

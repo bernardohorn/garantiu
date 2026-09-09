@@ -117,6 +117,14 @@ def risk_overview(analysis):
         st.info("Nenhum módulo alterado neste intervalo.")
         return
     st.caption(f"Puxado pelo módulo: {release['top_module']}")
+    risco = release["modulos_em_risco"]
+    outros = risco["alto"] + risco["medio"] - 1
+    if outros > 0:
+        st.caption(
+            f"O score do release é o do módulo mais arriscado, mas há mais "
+            f"{outros} módulo(s) em risco alto/médio nesta mudança "
+            f"({risco['alto']} em risco alto, {risco['medio']} em risco médio)."
+        )
     st.subheader("Composição do score (módulo de maior risco)")
     for factor, value in release["factors"].items():
         st.progress(min(value, 100) / 100, text=f"{factor}: {value:.0f}")
@@ -151,6 +159,11 @@ def manual_guide(analysis):
             st.write("**Cenários sugeridos**")
             for scenario in card["cenarios"]:
                 st.write(f"- {scenario}")
+            st.text_area(
+                "Nota do dev pro QA (opcional)",
+                key=f"nota_dev_{module['module']}",
+                placeholder="Ex.: mexi na validação de cupom, atenção ao fluxo de desconto.",
+            )
 
 
 def automated_suite(analysis):

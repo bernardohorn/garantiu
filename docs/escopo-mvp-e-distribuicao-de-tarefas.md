@@ -4,6 +4,12 @@ Entregável pedido pelos professores: (1) definição clara do escopo do MVP e (
 distribuídas entre a equipe. Baseado no problema validado (`docs/superpowers/specs/2026-09-09-garantiu-wireframe-design.md`)
 e no plano de implementação completo (`docs/superpowers/plans/2026-09-09-garantiu-mvp-implementation.md`).
 
+> **Atualização pós-entrega:** este documento registra o planejamento do MVP (4 telas,
+> Tasks 1–8) feito quando ainda restavam 2 dias de hackathon. O time terminou com tempo
+> sobrando e implementou as 14 tarefas do plano completo — as 7 telas estão entregues e
+> testadas (ver `docs/implementacao-concluida.md`). O planejamento abaixo é mantido como
+> registro histórico da decisão de priorização, não como o estado atual do produto.
+
 ## 1. Escopo do MVP
 
 O produto completo tem 7 telas (wireframe em `docs/wireframe/garantiu-wireframe.html`).

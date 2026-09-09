@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -39,7 +40,7 @@ def test_insertion_order_controls_flips_even_when_timestamps_tie(tmp_path):
     db = str(tmp_path / "tests.db")
     for status in ("passed", "passed", "failed", "failed"):
         record_test_run(db, [result(status)])
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.execute("UPDATE test_runs SET recorded_at = '2026-01-01'")
     assert flakiness_by_module(db) == {"checkout": 33.3}
 
@@ -54,7 +55,7 @@ def test_invalid_run_does_not_partially_write(tmp_path, invalid):
     with pytest.raises(ValueError):
         record_test_run(db, [result("failed"), invalid])
     assert flakiness_by_module(db) == {"checkout": 0.0}
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn:
         assert conn.execute("SELECT count(*) FROM test_runs").fetchone()[0] == 1
 
 

@@ -1,4 +1,5 @@
 import sqlite3
+from contextlib import closing
 
 import pytest
 
@@ -29,7 +30,7 @@ def test_reanalysis_is_one_row_and_timestamp_ties_use_ids(tmp_path):
     record_release_score(db, "v1", 85)
     record_release_outcome(db, "v1", "ok")
     record_release_outcome(db, "v1", "falhou")
-    with sqlite3.connect(db) as conn:
+    with closing(sqlite3.connect(db)) as conn, conn:
         conn.execute("UPDATE release_scores SET computed_at = '2026-01-01'")
         conn.execute("UPDATE release_outcomes SET recorded_at = '2026-01-01'")
     history = get_release_history(db)

@@ -49,10 +49,18 @@ Instruções de execução, formatos, persistência e verificação: `../README.
 
 ## Validação desta entrega
 
-- `python -m pytest -q`: **76 testes passaram** (Python 3.12.10).
+- `python -m pytest -q`: **78 testes passaram** (Python 3.12.10), cobrindo
+  também a nota do dev pro QA e a contagem de módulos em risco no score do
+  release, adicionadas depois da entrega inicial das 14 tarefas.
+- `python -m pytest -q --cov=garantiu --cov-report=term-missing`: **98% de
+  cobertura de linha** no pacote `garantiu`.
 - Servidor Streamlit iniciado em `127.0.0.1:8502`; endpoint
   `/_stcore/health` retornou `ok`.
 - As sete telas foram exercitadas com AppTest, incluindo dados preenchidos,
   publicação/cancelamento, resultado real e nova sessão lendo o histórico.
 - Inspeção visual no navegador não realizada: nenhum navegador disponível na
   integração desta sessão. Abra a aplicação e confira o layout localmente.
+- CI (`.github/workflows/tests.yml`) roda a mesma suíte com cobertura a cada
+  push/PR para `main`, sem depender de configuração local de identidade Git
+  (as fixtures de teste que criam commits configuram um autor local via
+  `tests/conftest.py`, em vez de depender do `git config` global da máquina).

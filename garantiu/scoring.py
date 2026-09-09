@@ -5,6 +5,17 @@ WEIGHTS = {
     "incidentes": 0.25,
 }
 
+RISK_THRESHOLDS = {"alto": 70, "medio": 40}
+
+
+def risk_label(score: float) -> str:
+    """Returns 'alto' if score >= 70, 'medio' if score >= 40, else 'baixo'."""
+    if score >= RISK_THRESHOLDS["alto"]:
+        return "alto"
+    if score >= RISK_THRESHOLDS["medio"]:
+        return "medio"
+    return "baixo"
+
 
 def normalize_across_modules(raw_values: dict) -> dict:
     """
@@ -81,9 +92,25 @@ def score_release(module_scores: list) -> dict:
     """
     Rolls per-module scores up to a release-level score using the
     "weakest link" rule: the release score is the highest module score.
-    Returns {"score": float, "top_module": str | None, "factors": dict}.
+    Returns {"score": float, "top_module": str | None, "factors": dict,
+    "modulos_em_risco": {"alto": int, "medio": int}}.
+
+    modulos_em_risco counts every changed module at "alto"/"medio" risk, not
+    just the top one — the release score alone doesn't show whether risk is
+    concentrated in one module or spread across many.
     """
+    modulos_em_risco = {"alto": 0, "medio": 0}
+    for m in module_scores:
+        label = risk_label(m["score"])
+        if label in modulos_em_risco:
+            modulos_em_risco[label] += 1
     if not module_scores:
-        return {"score": 0.0, "top_module": None, "factors": {}}
+        return {
+            "score": 0.0, "top_module": None, "factors": {},
+            "modulos_em_risco": modulos_em_risco,
+        }
     top = max(module_scores, key=lambda r: r["score"])
-    return {"score": top["score"], "top_module": top["module"], "factors": top["factors"]}
+    return {
+        "score": top["score"], "top_module": top["module"],
+        "factors": top["factors"], "modulos_em_risco": modulos_em_risco,
+    }

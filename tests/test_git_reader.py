@@ -1,14 +1,14 @@
-import git
 import pytest
 
 from garantiu.git_reader import get_changed_files
+from tests.conftest import init_repo
 
 
 @pytest.fixture
 def sample_repo(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    repo = git.Repo.init(repo_path)
+    repo = init_repo(repo_path)
     (repo_path / "checkout").mkdir()
     gateway = repo_path / "checkout" / "gateway.py"
     gateway.write_text("def pay():\n    pass\n")
@@ -34,7 +34,7 @@ def test_get_changed_files_detects_module_and_lines(sample_repo):
 def test_get_changed_files_uses_filename_as_module_at_repo_root(tmp_path):
     repo_path = tmp_path / "repo2"
     repo_path.mkdir()
-    repo = git.Repo.init(repo_path)
+    repo = init_repo(repo_path)
     f = repo_path / "README.md"
     f.write_text("v1")
     repo.index.add(["README.md"])

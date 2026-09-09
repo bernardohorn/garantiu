@@ -1,10 +1,10 @@
 from pathlib import Path
 
-import git
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from garantiu.release_history import get_release_history
+from tests.conftest import init_repo
 
 
 @pytest.fixture(autouse=True)
@@ -16,7 +16,7 @@ def isolated_data(tmp_path, monkeypatch):
 def analyzed_app(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    repo = git.Repo.init(repo_path)
+    repo = init_repo(repo_path)
     (repo_path / "checkout").mkdir()
     source = repo_path / "checkout/gateway.py"
     source.write_text("v1\n", encoding="utf-8")
@@ -125,6 +125,17 @@ def test_populated_screens_decision_and_outcome_persist(analyzed_app, tmp_path):
     fresh.sidebar.radio[0].set_value("Histórico & Tendências").run()
     fresh.text_input[0].set_value(analysis["repo_path"]).run()
     assert fresh.table[0].value.iloc[0]["outcome"] == "falhou"
+
+
+def test_manual_guide_note_field_is_session_only(analyzed_app):
+    at = analyzed_app
+    at.sidebar.radio[0].set_value("Roteiro de Teste Manual").run()
+    assert len(at.text_area) == 1
+    at.text_area[0].set_value("Atenção ao fluxo de desconto.").run()
+    assert at.session_state["nota_dev_checkout"] == "Atenção ao fluxo de desconto."
+
+    fresh = AppTest.from_file("../app.py", default_timeout=15).run()
+    assert "nota_dev_checkout" not in fresh.session_state
 
 
 def test_repeated_analysis_uses_real_test_flips(analyzed_app, tmp_path):

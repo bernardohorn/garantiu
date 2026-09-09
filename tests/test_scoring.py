@@ -58,6 +58,19 @@ def test_score_release_uses_max_module_score_regardless_of_order():
     assert release["factors"] == {"complexidade": 100.0}
 
 
+def test_score_release_counts_modules_by_risk_label():
+    module_scores = [
+        {"module": "catalogo", "score": 20.0, "factors": {}},
+        {"module": "checkout", "score": 85.0, "factors": {}},
+        {"module": "auth", "score": 55.0, "factors": {}},
+    ]
+    release = score_release(module_scores)
+    assert release["modulos_em_risco"] == {"alto": 1, "medio": 1}
+
+
 def test_score_release_handles_empty_list():
     release = score_release([])
-    assert release == {"score": 0.0, "top_module": None, "factors": {}}
+    assert release == {
+        "score": 0.0, "top_module": None, "factors": {},
+        "modulos_em_risco": {"alto": 0, "medio": 0},
+    }

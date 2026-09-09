@@ -1,4 +1,3 @@
-import git
 import pytest
 
 from garantiu.bug_history import (
@@ -6,13 +5,14 @@ from garantiu.bug_history import (
     build_bug_history,
     get_bug_fix_commits,
 )
+from tests.conftest import init_repo
 
 
 @pytest.fixture
 def repo_with_bug_fixes(tmp_path):
     repo_path = tmp_path / "repo"
     repo_path.mkdir()
-    repo = git.Repo.init(repo_path)
+    repo = init_repo(repo_path)
     (repo_path / "checkout").mkdir()
     f = repo_path / "checkout" / "gateway.py"
 
@@ -58,7 +58,7 @@ def test_bug_details_recent_first(repo_with_bug_fixes):
 
 
 def test_bug_details_root_module_and_one_entry_for_multiple_files(tmp_path):
-    repo = git.Repo.init(tmp_path)
+    repo = init_repo(tmp_path)
     for name in ["README.md", "checkout/a.py", "checkout/b.py"]:
         path = tmp_path / name
         path.parent.mkdir(exist_ok=True)
@@ -76,7 +76,7 @@ def test_bug_details_root_module_and_one_entry_for_multiple_files(tmp_path):
 
 
 def test_selected_ref_history_excludes_other_branch_and_later_fixes(tmp_path):
-    with git.Repo.init(tmp_path) as repo:
+    with init_repo(tmp_path) as repo:
         (tmp_path / "checkout").mkdir()
         source = tmp_path / "checkout/gateway.py"
         source.write_text("initial", encoding="utf-8")

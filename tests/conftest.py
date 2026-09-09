@@ -12,4 +12,5 @@ def init_repo(path):
         config.set_value("user", "name", "garantiu-tests")
         config.set_value("user", "email", "garantiu-tests@example.com")
         config.set_value("commit", "gpgsign", "false")
+        config.set_value("diff", "renames", "true")
     return repo

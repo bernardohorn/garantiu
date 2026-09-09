@@ -11,7 +11,7 @@ com Python 3.12.10, Streamlit 1.63.0, GitPython 3.1.62, junitparser 5.0.3 e
 pytest 9.1.1. As dependências declaradas estão em `requirements.txt`.
 
 ```powershell
-cd C:\Projetos\garantiu
+Abra a pasta aonde está o caminho do Garantiu
 py -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m pytest -q

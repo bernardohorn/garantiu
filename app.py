@@ -33,7 +33,7 @@ if screen == "Conectar Release":
         test_health = test_health_by_module(test_results)
         incidents = load_incidents(incidents_path)
 
-        # flakiness real entra na Task 15; até lá, roda sem esse sub-sinal.
+        # flakiness real entra na Task 9; até lá, roda sem esse sub-sinal.
         module_scores = score_modules(changed_files, bug_history, test_health, incidents, flakiness={})
         release = score_release(module_scores)
 

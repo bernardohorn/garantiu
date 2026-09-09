@@ -52,7 +52,7 @@ def get_decision_history(db_path: str, release: str) -> list:
     conn.row_factory = sqlite3.Row
     try:
         rows = conn.execute(
-            "SELECT * FROM decisions WHERE release = ? ORDER BY decided_at DESC",
+            "SELECT * FROM decisions WHERE release = ? ORDER BY decided_at DESC, id DESC",
             (release,),
         ).fetchall()
         return [dict(row) for row in rows]

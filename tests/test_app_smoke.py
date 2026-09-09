@@ -5,6 +5,7 @@ from streamlit.testing.v1 import AppTest
 
 from garantiu.release_history import get_release_history
 from tests.conftest import init_repo
+from tests.test_repository_source import remote_fixture
 
 
 @pytest.fixture(autouse=True)
@@ -205,6 +206,41 @@ def test_invalid_inputs_show_error_without_recording(field, value, tmp_path):
 def test_failed_reanalysis_clears_stale_analysis(analyzed_app):
     at = analyzed_app
     at.text_input[3].set_value("missing-report.xml")
+    at.button[0].click().run()
+    assert not at.exception
+    assert at.error
+    assert at.session_state.analysis is None
+
+
+def test_github_analysis_all_screens_and_persistent_url_history(remote_fixture):
+    _, calls = remote_fixture
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input[0].set_value("https://github.com/Owner/Project.git")
+    at.text_input[1].set_value("v1")
+    at.text_input[2].set_value("release/test")
+    at.button[0].click().run()
+    assert not at.exception
+    assert not at.error
+    assert at.session_state.analysis["repo_path"] == "https://github.com/owner/project"
+    assert at.session_state.analysis["changed_files"][0]["path"] == "checkout/pay.py"
+    for screen in list(at.sidebar.radio[0].options)[1:]:
+        at.sidebar.radio[0].set_value(screen).run()
+        assert not at.exception
+        assert not at.error
+    at.radio(key="outcome").set_value("ok")
+    at.button[0].click().run()
+    assert at.table[0].value.iloc[0]["outcome"] == "ok"
+    fresh = AppTest.from_file("../app.py").run()
+    fresh.sidebar.radio[0].set_value("Histórico & Tendências").run()
+    fresh.text_input[0].set_value("https://github.com/OWNER/PROJECT.git/").run()
+    assert not fresh.error
+    assert fresh.table[0].value.iloc[0]["outcome"] == "ok"
+    assert len(calls) == 1  # Reading persisted history never downloads again.
+
+
+def test_invalid_github_url_shows_error_without_analysis():
+    at = AppTest.from_file("../app.py").run()
+    at.text_input[0].set_value("https://github.com/owner/project/tree/main")
     at.button[0].click().run()
     assert not at.exception
     assert at.error

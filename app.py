@@ -18,6 +18,7 @@ from garantiu.release_history import (
     get_release_history, record_release_outcome, record_release_score,
 )
 from garantiu.scoring import score_modules, score_release
+from garantiu.repository_source import prepare_repository, repository_key
 from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import parse_junit_report, test_health_by_module
@@ -36,7 +37,10 @@ SCREENS = [
 
 def connect_release():
     st.title("Conectar release")
-    st.text_input("Caminho do repositório", value=".", key="repo_path")
+    st.text_input(
+        "Pasta local ou link do GitHub", value=".", key="repo_path",
+        help="Ex.: C:\\Projetos\\meu-sistema ou https://github.com/usuario/projeto",
+    )
     base_ref = st.text_input("Comparar desde", value="HEAD~1")
     head_ref = st.text_input("Branch do release", value="HEAD")
     junit_path = st.text_input(
@@ -52,6 +56,9 @@ def connect_release():
         value=str(ROOT / "sample_data/incident_details.csv"),
     )
     st.caption(
+        "Links do GitHub são baixados a cada análise. Use a URL da raiz do "
+        "repositório e informe a branch nos campos acima. "
+        "JUnit e CSV continuam sendo arquivos locais. "
         "Os arquivos sample_data são exemplos. Para analisar seu produto, "
         "use os relatórios e incidentes correspondentes ao repositório. "
         "Cada análise registra uma rodada de testes; use relatórios de "
@@ -64,12 +71,19 @@ def connect_release():
         repo_path = st.session_state.repo_path.strip()
         if not repo_path or not base_ref.strip() or not head_ref.strip():
             raise ValueError("Informe o repositório e as duas referências Git.")
-        with git.Repo(repo_path) as repo:
-            repo_key = os.path.normcase(str(Path(repo.working_dir).resolve()))
-            base_sha = repo.commit(base_ref.strip()).hexsha
-            head_sha = repo.commit(head_ref.strip()).hexsha
-        changed_files = get_changed_files(repo_key, base_sha, head_sha)
-        bug_history = build_bug_history(repo_key, ref=head_sha)
+        with prepare_repository(repo_path) as source:
+            repo_key = source.key
+            with git.Repo(source.path) as repo:
+                base_sha = repo.commit(base_ref.strip()).hexsha
+                head_sha = repo.commit(head_ref.strip()).hexsha
+            changed_files = get_changed_files(source.path, base_sha, head_sha)
+            bug_history = build_bug_history(source.path, ref=head_sha)
+            bug_details = {
+                module: bug_history_detail_by_module(
+                    source.path, module, ref=head_sha,
+                )
+                for module in {f["module"] for f in changed_files}
+            }
         test_results = parse_junit_report(junit_path.strip())
         test_health = test_health_by_module(test_results)
         incidents = load_incidents(incidents_path.strip())
@@ -77,10 +91,6 @@ def connect_release():
             load_incident_details(incident_details_path.strip())
             if incident_details_path.strip() else {}
         )
-        bug_details = {
-            module: bug_history_detail_by_module(repo_key, module, ref=head_sha)
-            for module in {f["module"] for f in changed_files}
-        }
         DATA_DIR.mkdir(parents=True, exist_ok=True)
         record_test_run(TEST_HISTORY_DB, test_results, repo_key=repo_key)
         flakiness = flakiness_by_module(TEST_HISTORY_DB, repo_key=repo_key)
@@ -252,10 +262,10 @@ def publication_decision(analysis):
 def release_trends():
     st.title("Histórico & tendências")
     repo_path = st.text_input(
-        "Repositório do histórico",
+        "Repositório do histórico (pasta ou link do GitHub)",
         value=st.session_state.get("history_repo", str(ROOT)),
     )
-    repo_key = os.path.normcase(str(Path(repo_path).resolve()))
+    repo_key = repository_key(repo_path)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history = get_release_history(RELEASE_HISTORY_DB, repo_key=repo_key)
     if not history:

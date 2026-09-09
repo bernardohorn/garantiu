@@ -26,7 +26,7 @@ Abra `http://localhost:8501`; encerre o servidor com `Ctrl+C`.
 
 ## Usar as sete telas
 
-1. **Conectar Release:** informe um repositório Git local e duas referências
+1. **Conectar Release:** informe uma pasta Git local ou link HTTPS do GitHub e duas referências
    existentes (branch, tag ou commit). `.` e `HEAD~1` / `HEAD` permitem uma
    primeira análise deste repositório, que precisa ter pelo menos dois commits.
    O diff considera os commits selecionados, não mudanças sem commit.
@@ -45,11 +45,46 @@ Abra `http://localhost:8501`; encerre o servidor com `Ctrl+C`.
    Isso grava uma decisão de auditoria; não faz deploy.
 7. **Histórico & Tendências:** consulte scores anteriores e marque `ok` ou
    `falhou` após observar o resultado real. O histórico pode ser consultado
-   depois de reiniciar a aplicação, informando o caminho do repositório.
+   depois de reiniciar a aplicação, informando a pasta ou o link do repositório.
 
 Os exemplos de `sample_data/` usam módulos fictícios (`checkout`, `auth`,
 `catalogo`). Eles demonstram os formatos, mas não representam os testes deste
 repositório. Para uma análise real, forneça dados do produto selecionado.
+
+### Analisar um repositório do GitHub
+
+No campo **Pasta local ou link do GitHub**, cole, por exemplo:
+
+```text
+https://github.com/bernardohorn/garantiu
+```
+
+Use `HEAD~1` em **Comparar desde** e `HEAD` em **Branch do release** para
+comparar os últimos commits da branch padrão. Também é possível informar
+branches como `main`, `release/test`, tags ou hashes existentes no remoto.
+O sufixo `.git` e uma barra final são aceitos. Links de páginas como
+`/tree/main`, `/blob/arquivo`, URLs SSH e URLs com credenciais não são aceitos;
+use o link da raiz e informe a referência no campo de branch.
+
+Ao analisar, o app faz um clone temporário com o histórico completo e as
+branches, sem checkout nem execução do código baixado. Cada análise baixa
+novamente o estado remoto atual; não depende de um clone anterior. A cópia
+temporária é removida depois da leitura, inclusive em caso de erro de análise.
+O download tem limite de 120 segundos; para repositórios grandes, clone com
+seu Git e use a pasta local. É necessário ter Git instalado e conexão à rede.
+
+Repositórios públicos funcionam diretamente. Para privados, a conta que
+executa o Streamlit deve ter autenticação HTTPS já configurada no Git (por
+exemplo, no gerenciador de credenciais). A aplicação não solicita login nem
+token; se o acesso não estiver disponível, mostra uma mensagem de erro.
+Para repositórios renomeados, use a URL atual, pois redirecionamentos não são
+seguidos automaticamente.
+
+Os campos JUnit e CSV continuam apontando para **arquivos locais**. O app não
+baixa artefatos do GitHub Actions nem executa testes do repositório remoto.
+Depois de importar seus relatórios, as sete telas funcionam como na análise
+local. Em **Histórico & Tendências**, informe o mesmo link para consultar os
+resultados sem precisar baixar novamente o repositório.
 
 ## Entradas e cálculo
 
@@ -99,7 +134,10 @@ Três bancos SQLite são criados automaticamente na raiz da aplicação:
 defina `GARANTIU_DATA_DIR` antes de iniciar. Faça backup dos três arquivos
 com a aplicação encerrada; para restaurar, coloque-os de volta na mesma pasta.
 
-Os históricos são separados pelo caminho canônico do repositório. Releases
+Os históricos locais são separados pelo caminho canônico do repositório.
+Para GitHub, a identidade é a URL normalizada (sem `.git` e sem distinção de
+maiúsculas/minúsculas), independente da pasta temporária. Uma pasta local e
+um link do mesmo projeto têm históricos separados. Releases
 registram a referência final e os hashes completos do intervalo comparado.
 Reanalisar o mesmo intervalo mantém as observações e apresenta o último score
 e resultado na tabela, sem duplicar a opção de release. Mover o repositório

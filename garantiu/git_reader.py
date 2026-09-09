@@ -8,8 +8,8 @@ def get_changed_files(repo_path: str, base_ref: str, head_ref: str) -> list[dict
     module is the top-level directory of path, or the filename itself if the
     file lives at the repo root.
     """
-    repo = git.Repo(repo_path)
-    numstat = repo.git.diff(base_ref, head_ref, "--numstat")
+    with git.Repo(repo_path) as repo:
+        numstat = repo.git.diff(base_ref, head_ref, "--numstat")
 
     results = []
     for line in numstat.splitlines():

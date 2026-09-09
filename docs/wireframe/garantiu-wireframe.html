@@ -195,7 +195,7 @@
   }
 
   /* ---------- Stage ---------- */
-  .stage { padding: 28px 40px 60px; max-width: 1180px; }
+  .stage { padding: 28px 40px 60px; max-width: 1120px; margin: 0 auto; }
   .stage-head {
     display: flex;
     align-items: baseline;
@@ -323,7 +323,7 @@
     font-family: var(--mono);
     font-size: 10.5px;
     letter-spacing: 0.04em;
-    padding: 3px 8px;
+    padding: 4px 9px;
     border-radius: 100px;
     display: inline-flex;
     align-items: center;
@@ -381,32 +381,42 @@
   .factor-fill { height: 100%; border-radius: 100px; background: var(--ink-soft); }
 
   .score-hero {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: 24px;
+    display: flex;
     align-items: center;
+    gap: 32px;
     padding-bottom: 20px;
     margin-bottom: 20px;
     border-bottom: 1px solid var(--line-soft);
   }
   .score-num {
     font-family: var(--mono);
-    font-size: 46px;
+    font-size: 44px;
     font-weight: 700;
     line-height: 1;
     color: var(--risk-hi);
+    flex-shrink: 0;
   }
-  .score-num small { font-size: 16px; color: var(--ink-soft); font-weight: 500; }
+  .score-num small { font-size: 15px; color: var(--ink-soft); font-weight: 500; }
+  .score-detail { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 340px; }
 
-  .bars-row { display: flex; align-items: flex-end; gap: 14px; height: 120px; padding: 0 4px; }
-  .bar-pair { display: flex; flex-direction: column; align-items: center; gap: 6px; flex: 1; }
-  .bar-pair .bars { display: flex; align-items: flex-end; gap: 3px; height: 84px; }
-  .bar-pair .bar { width: 9px; border-radius: 2px 2px 0 0; background: var(--line); }
+  .bars-row {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 40px;
+    height: 128px;
+    padding: 0 4px;
+    max-width: 620px;
+    margin: 0 auto;
+  }
+  .bar-pair { display: flex; flex-direction: column; align-items: center; gap: 7px; width: 52px; }
+  .bar-pair .bars { display: flex; align-items: flex-end; gap: 6px; height: 88px; }
+  .bar-pair .bar { width: 14px; border-radius: 2px 2px 0 0; background: var(--line); }
   .bar-pair .bar.real { background: var(--ink-soft); }
   .bar-pair .tag { font-family: var(--mono); font-size: 9.5px; color: var(--ink-soft); }
   .bar-pair .dot { width: 6px; height: 6px; border-radius: 50%; }
 
-  .legend { display: flex; gap: 16px; font-size: 11px; color: var(--ink-soft); margin-top: 10px; }
+  .legend { display: flex; justify-content: center; gap: 20px; font-size: 11px; color: var(--ink-soft); margin-top: 14px; }
   .legend .sw { width: 9px; height: 9px; display: inline-block; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 
   .diff-box {
@@ -513,9 +523,9 @@
 
         <div class="score-hero">
           <div class="score-num">74<small>/100</small></div>
-          <div>
-            <span class="chip hi" style="margin-bottom:8px;">risco alto</span>
-            <div class="meter" style="margin-top:8px; max-width:360px;">
+          <div class="score-detail">
+            <span class="chip hi">risco alto</span>
+            <div class="meter">
               <div class="track"><div class="fill" style="width:74%; background:var(--risk-hi);"></div></div>
               <div class="scale"><span>0 baixo</span><span>50 médio</span><span>100 crítico</span></div>
             </div>

@@ -302,6 +302,66 @@ def test_quality_inputs_explain_sources_and_offer_real_csv_templates():
     assert all(not field.value for field in at.text_input[3:6])
 
 
+def test_quality_files_are_discovered_and_prefilled_from_local_project(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    with init_repo(project) as repo:
+        (project / "src.py").write_text("value = 1\n", encoding="utf-8")
+        repo.index.add(["src.py"])
+        repo.index.commit("initial")
+    reports = project / "reports"
+    reports.mkdir()
+    junit = reports / "junit.xml"
+    counts = reports / "incidents.csv"
+    details = reports / "incident_details.csv"
+    junit.write_text("<testsuite/>", encoding="utf-8")
+    counts.write_text("module,incident_count\ncheckout,1\n", encoding="utf-8")
+    details.write_text(
+        "module,description,date\ncheckout,outage,2026-09-10\n",
+        encoding="utf-8",
+    )
+
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input(key="_connect_repository_input").set_value(str(project)).run()
+
+    assert not at.exception
+    assert not at.error
+    assert at.text_input(key=f"junit_path:{project}").value == str(junit.resolve())
+    assert at.text_input(key=f"incidents_path:{project}").value == str(counts.resolve())
+    assert at.text_input(key=f"incident_details_path:{project}").value == str(
+        details.resolve()
+    )
+    assert any("3 arquivo(s)" in item.value for item in at.success)
+
+
+def test_multiple_discovered_reports_can_be_selected(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    with init_repo(project) as repo:
+        (project / "src.py").write_text("value = 1\n", encoding="utf-8")
+        repo.index.add(["src.py"])
+        repo.index.commit("initial")
+    first = project / "junit.xml"
+    second = project / "reports" / "other.xml"
+    second.parent.mkdir()
+    first.write_text("<testsuite/>", encoding="utf-8")
+    second.write_text("<testsuites/>", encoding="utf-8")
+
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input(key="_connect_repository_input").set_value(str(project)).run()
+    input_key = f"junit_path:{project}"
+    selection_key = f"{input_key}:candidate"
+
+    assert at.text_input(key=input_key).value == ""
+    assert set(at.selectbox(key=selection_key).options) == {
+        str(first.resolve()), str(second.resolve()),
+    }
+
+    at.selectbox(key=selection_key).set_value(str(second.resolve())).run()
+
+    assert at.text_input(key=input_key).value == str(second.resolve())
+
+
 def test_user_can_choose_the_local_storage_folder(tmp_path):
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     chosen_directory = tmp_path / "dados-da-release"
@@ -402,8 +462,10 @@ def test_report_in_github_commit_populates_actual_suite(remote_fixture):
         repo.index.commit("test report")
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     at.text_input[0].set_value("https://github.com/owner/project").run()
+    assert at.text_input(
+        key="junit_path:https://github.com/owner/project",
+    ).value == "repo:results.xml"
     at.text_input[1].set_value("v1")
-    at.text_input[3].set_value("repo:results.xml")
     at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
@@ -436,7 +498,7 @@ def test_github_analysis_all_screens_and_persistent_url_history(remote_fixture):
     fresh.text_input[0].set_value("https://github.com/OWNER/PROJECT.git/").run()
     assert not fresh.error
     assert fresh.table[0].value.iloc[0]["Resultado"] == "ok"
-    assert len(calls) == 1  # Reading persisted history never downloads again.
+    assert len(calls) == 2  # Discovery + analysis; history reading does not download.
 
 
 def test_invalid_github_url_shows_error_without_analysis():

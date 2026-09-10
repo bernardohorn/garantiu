@@ -15,7 +15,9 @@ from garantiu.decision_log import get_decision_history, record_decision
 from garantiu.git_reader import (
     get_changed_files, is_documentation_change, resolve_comparison_base,
 )
-from garantiu.incidents import load_incident_details, load_incidents
+from garantiu.incidents import (
+    load_project_incident_details, load_project_incidents,
+)
 from garantiu.manual_test_guide import build_module_card
 from garantiu.module_detail import build_module_detail
 from garantiu.release_history import (
@@ -26,6 +28,7 @@ from garantiu.release_history import (
 )
 from garantiu.scoring import score_modules, score_release
 from garantiu.repository_source import prepare_repository, repository_key
+from garantiu.quality_sources import discover_quality_sources
 from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
@@ -47,6 +50,7 @@ SCREENS = [
 REPOSITORY_SOURCE_KEY = "repository_source"
 DATA_DIRECTORY_KEY = "data_directory"
 DATA_DIRECTORY_INPUT_KEY = "data_directory_input"
+QUALITY_DISCOVERY_KEY = "quality_source_discovery"
 
 
 def _parse_data_directory(value: object) -> Path:
@@ -108,6 +112,64 @@ def render_storage_location() -> None:
             "Quando houver dados, os arquivos serão salvos aqui: garantiu.db, "
             "garantiu_test_history.db e garantiu_release_history.db."
         )
+
+
+def _discover_repository_quality_sources(repo_source: str, ref: str) -> dict:
+    """Discover reports once per repository/ref pair in the current session."""
+    empty = {"junit": [], "incident_counts": [], "incident_details": []}
+    if not repo_source.strip() or not ref.strip():
+        return {"identity": None, "sources": empty, "error": None}
+    identity = (repo_source.strip(), ref.strip())
+    cached = st.session_state.get(QUALITY_DISCOVERY_KEY)
+    if cached and cached.get("identity") == identity:
+        return cached
+    try:
+        with st.spinner("Procurando relatórios no projeto..."):
+            with prepare_repository(repo_source.strip()) as source:
+                sources = discover_quality_sources(source.path, ref.strip())
+        result = {"identity": identity, "sources": sources, "error": None}
+    except (OSError, ValueError, git.GitError, git.BadName, git.BadObject) as exc:
+        result = {"identity": identity, "sources": empty, "error": str(exc)}
+    st.session_state[QUALITY_DISCOVERY_KEY] = result
+    return result
+
+
+def _select_discovered_source(selection_key: str, input_key: str) -> None:
+    selected = st.session_state.get(selection_key)
+    if selected:
+        st.session_state[input_key] = selected
+
+
+def _quality_source_input(
+    label: str, input_key: str, candidates: list[str], *, help_text: str | None = None,
+) -> str:
+    """Render an editable path, auto-filling or offering discovered candidates."""
+    if input_key not in st.session_state:
+        st.session_state[input_key] = candidates[0] if len(candidates) == 1 else ""
+    if len(candidates) == 1:
+        st.caption(f"Encontrado automaticamente: {candidates[0]}")
+    elif len(candidates) > 1:
+        selection_key = f"{input_key}:candidate"
+        st.selectbox(
+            f"Escolher {label.lower()} encontrado",
+            candidates,
+            index=None,
+            placeholder="Selecione um dos arquivos encontrados",
+            key=selection_key,
+            on_change=_select_discovered_source,
+            args=(selection_key, input_key),
+        )
+        st.caption(
+            f"Foram encontrados {len(candidates)} arquivos compatíveis. "
+            "Escolha um deles ou informe outro caminho abaixo."
+        )
+    return st.text_input(label, key=input_key, help=help_text)
+
+
+def _refresh_quality_discovery(*input_keys: str) -> None:
+    st.session_state.pop(QUALITY_DISCOVERY_KEY, None)
+    for key in input_keys:
+        st.session_state.pop(key, None)
 
 
 def _repository_input(label: str, widget_key: str, **kwargs) -> str:
@@ -172,31 +234,54 @@ def connect_release():
              "usa o primeiro commit alcançável.",
     )
     head_ref = st.text_input("Branch do release", value="HEAD")
+    discovery = _discover_repository_quality_sources(repo_input, head_ref)
+    discovered = discovery["sources"]
+    junit_key = f"junit_path:{repo_input}"
+    incidents_key = f"incidents_path:{repo_input}"
+    incident_details_key = f"incident_details_path:{repo_input}"
     with st.expander("Resultados de testes e incidentes — opcional"):
         st.caption(
             "Enriqueça a análise com resultados reais de testes e incidentes. "
             "A ausência de uma fonte não significa ausência de risco."
         )
-        junit_path = st.text_input(
+        if discovery["error"]:
+            st.warning(
+                "A busca automática não encontrou o projeto. Você ainda pode "
+                f"informar os arquivos manualmente. Detalhe: {discovery['error']}"
+            )
+        elif repo_input.strip():
+            total_found = sum(len(items) for items in discovered.values())
+            if total_found:
+                st.success(f"{total_found} arquivo(s) de qualidade encontrado(s) no projeto.")
+            else:
+                st.info("Nenhum relatório JUnit ou CSV de incidentes foi encontrado no projeto.")
+        st.button(
+            "Procurar novamente", key="refresh_quality_sources",
+            on_click=_refresh_quality_discovery,
+            args=(junit_key, incidents_key, incident_details_key),
+        )
+        junit_path = _quality_source_input(
             "Relatório de testes (JUnit XML)",
-            value="", key=f"junit_path:{repo_input}",
-            help="Informe um arquivo local ou repo:reports/junit.xml para ler "
-                 "um XML do commit selecionado. Deixe vazio se não houver relatório.",
+            junit_key, discovered["junit"],
+            help_text="Informe um arquivo local ou repo:reports/junit.xml para ler "
+                      "um XML do commit selecionado. Deixe vazio se não houver relatório.",
         )
         st.caption(
             "Informa o status dos testes já executados no terminal ou na CI. "
             "JUnit não representa cobertura de código."
         )
-        incidents_path = st.text_input(
+        incidents_path = _quality_source_input(
             "Arquivo de incidentes (CSV)",
-            value="", key=f"incidents_path:{repo_input}",
+            incidents_key, discovered["incident_counts"],
+            help_text="Aceita um arquivo local ou repo:caminho/incidents.csv.",
         )
         st.caption(
             "Quantidade de incidentes por módulo, obtida do histórico operacional da equipe."
         )
-        incident_details_path = st.text_input(
+        incident_details_path = _quality_source_input(
             "Arquivo de detalhe de incidentes (CSV, opcional)",
-            value="", key=f"incident_details_path:{repo_input}",
+            incident_details_key, discovered["incident_details"],
+            help_text="Aceita um arquivo local ou repo:caminho/incident_details.csv.",
         )
         st.caption(
             "Descrição e data dos incidentes, obtidas do histórico operacional da equipe."
@@ -223,8 +308,8 @@ def connect_release():
             "das mensagens de commit do Git, como fix, bug e corrige."
         )
     st.caption(
-        "Links GitHub são lidos novamente em cada análise. JUnit pode ser local "
-        "ou usar repo:caminho/arquivo.xml; os arquivos CSV permanecem locais."
+        "A busca considera XMLs JUnit e CSVs com os cabeçalhos esperados. Em links "
+        "GitHub, os arquivos encontrados usam repo:caminho/arquivo."
     )
     if not st.button(
         "Analisar mudanças", type="primary", use_container_width=True,
@@ -252,6 +337,16 @@ def connect_release():
                 test_results = load_project_test_report(
                     repo, head_sha, junit_path,
                 )
+                incidents = (
+                    load_project_incidents(repo, head_sha, incidents_path)
+                    if incidents_path.strip() else {}
+                )
+                incident_details = (
+                    load_project_incident_details(
+                        repo, head_sha, incident_details_path,
+                    )
+                    if incident_details_path.strip() else {}
+                )
             all_changed_files = get_changed_files(
                 source.path, base_sha, head_sha,
             )
@@ -274,11 +369,6 @@ def connect_release():
                 source.path, {f["path"] for f in changed_files}, ref=head_sha,
             )
         test_health = test_health_by_module(test_results)
-        incidents = load_incidents(incidents_path.strip()) if incidents_path.strip() else {}
-        incident_details = (
-            load_incident_details(incident_details_path.strip())
-            if incident_details_path.strip() else {}
-        )
         data_dir, _, test_history_db, release_history_db = _database_paths()
         data_dir.mkdir(parents=True, exist_ok=True)
         if test_results:

@@ -1,6 +1,10 @@
 import pytest
 
-from garantiu.incidents import load_incident_details, load_incidents
+from garantiu.incidents import (
+    load_incident_details, load_incidents, load_project_incident_details,
+    load_project_incidents,
+)
+from tests.conftest import init_repo
 
 
 @pytest.fixture
@@ -70,3 +74,28 @@ def test_incident_details_header_only_is_empty(tmp_path):
     path = tmp_path / "details.csv"
     path.write_text("module,description,date\n", encoding="utf-8")
     assert load_incident_details(str(path)) == {}
+
+
+def test_project_incident_loaders_read_repo_paths(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    with init_repo(project) as repo:
+        (project / "reports").mkdir()
+        (project / "reports/incidents.csv").write_text(
+            "module,incident_count\ncheckout,4\n", encoding="utf-8",
+        )
+        (project / "reports/incident_details.csv").write_text(
+            "module,description,date\ncheckout,outage,2026-09-10\n",
+            encoding="utf-8",
+        )
+        repo.index.add([
+            "reports/incidents.csv", "reports/incident_details.csv",
+        ])
+        ref = repo.index.commit("incident reports").hexsha
+
+        assert load_project_incidents(
+            repo, ref, "repo:reports/incidents.csv",
+        ) == {"checkout": 4}
+        assert load_project_incident_details(
+            repo, ref, "repo:reports/incident_details.csv",
+        ) == {"checkout": [{"description": "outage", "date": "2026-09-10"}]}

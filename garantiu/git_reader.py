@@ -75,13 +75,25 @@ def get_changed_files(repo_path: str, base_ref: str, head_ref: str) -> list[dict
     file lives at the repo root.
     """
     with git.Repo(repo_path) as repo:
-        numstat = repo.git.diff(base_ref, head_ref, "--numstat")
+        numstat = repo.git.diff(base_ref, head_ref, "--numstat", "-z")
 
     results = []
-    for line in numstat.splitlines():
-        if not line.strip():
+    records = numstat.split("\0")
+    index = 0
+    while index < len(records):
+        record = records[index]
+        index += 1
+        if not record:
             continue
-        added_str, removed_str, path = line.split("\t")
+        added_str, removed_str, path = record.split("\t", 2)
+        if not path:
+            # With -z, a rename stores old and new paths as the next two
+            # NUL-delimited fields instead of quoting or brace-compressing.
+            if index + 1 >= len(records):
+                raise ValueError("Saída Git incompleta ao ler um arquivo renomeado.")
+            index += 1  # old path is intentionally ignored
+            path = records[index]
+            index += 1
         added = 0 if added_str == "-" else int(added_str)
         removed = 0 if removed_str == "-" else int(removed_str)
         path = _resolve_renamed_path(path)

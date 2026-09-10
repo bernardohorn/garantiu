@@ -73,6 +73,25 @@ def test_get_changed_files_resolves_module_on_rename_different_filename(tmp_path
     assert changes[0]["path"] == "billing/pay.py"
 
 
+def test_get_changed_files_preserves_unicode_path(tmp_path):
+    repo_path = tmp_path / "repo-unicode"
+    repo_path.mkdir()
+    repo = init_repo(repo_path)
+    document = repo_path / "Grupo 1 - 2° Hackathon.pdf"
+    document.write_text("v1", encoding="utf-8")
+    repo.index.add([document.name])
+    repo.index.commit("initial")
+    document.write_text("v2", encoding="utf-8")
+    repo.index.add([document.name])
+    repo.index.commit("update unicode document")
+
+    changes = get_changed_files(str(repo_path), "HEAD~1", "HEAD")
+
+    assert changes[0]["path"] == document.name
+    assert is_documentation_change(changes[0]["path"])
+    repo.close()
+
+
 def test_get_changed_files_uses_filename_as_module_at_repo_root(tmp_path):
     repo_path = tmp_path / "repo2"
     repo_path.mkdir()

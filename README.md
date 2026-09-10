@@ -6,23 +6,140 @@ Dashboard local de risco de releases, implementado em Python e Streamlit.
 Cruza mudanças do Git, resultados JUnit e incidentes CSV para priorizar
 testes manuais e automatizados e registrar decisões humanas.
 
-## Executar no Windows (PowerShell)
+## Sumário
 
-Pré-requisitos: Python 3.10+ e Git disponíveis no terminal. Ambiente validado
-com Python 3.12.10, Streamlit 1.63.0, GitPython 3.1.62, junitparser 5.0.3 e
-pytest 9.1.1. As dependências declaradas estão em `requirements.txt`.
+- [Pré-requisitos](#pré-requisitos)
+- [Início rápido (primeira vez)](#início-rápido-primeira-vez)
+- [Rodar de novo (depois da primeira vez)](#rodar-de-novo-depois-da-primeira-vez)
+- [Problemas comuns](#problemas-comuns)
+- [Usar as sete telas](#usar-as-sete-telas)
+- [Analisar um repositório do GitHub](#analisar-um-repositório-do-github)
+- [Entradas e cálculo](#entradas-e-cálculo)
+- [Persistência e limites](#persistência-e-limites)
+- [Verificação e referências](#verificação-e-referências)
+
+## Pré-requisitos
+
+Antes de começar, confira se você tem os dois programas abaixo instalados e
+visíveis no terminal. Abra o **PowerShell** (menu Iniciar → digite
+"PowerShell") e rode:
 
 ```powershell
-Abra a pasta aonde está o caminho do Garantiu
+python --version
+git --version
+```
+
+- `python --version` deve mostrar **3.10 ou mais recente** (o projeto foi
+  validado com 3.12.10). Se der erro `não é reconhecido...`, instale o
+  Python em <https://www.python.org/downloads/> marcando a opção
+  **"Add python.exe to PATH"** durante a instalação, e abra um novo
+  PowerShell depois.
+- `git --version` deve mostrar algum número de versão. Se der erro, instale
+  o Git em <https://git-scm.com/downloads> (aceite as opções padrão do
+  instalador).
+
+Se as duas versões apareceram, pode seguir para o próximo passo.
+
+## Início rápido (primeira vez)
+
+Rode os comandos abaixo **um de cada vez**, na ordem, dentro da pasta do
+projeto. Se algum comando der erro, veja [Problemas comuns](#problemas-comuns)
+antes de continuar para o próximo.
+
+**1. Entre na pasta do projeto.** Troque o caminho abaixo pelo local onde
+você salvou/clonou o garantiu:
+
+```powershell
+cd "C:\caminho\para\garantiu"
+```
+
+**2. Crie o ambiente virtual** (uma pasta `.venv` isolada, só para as
+dependências deste projeto — não interfere no seu Python global):
+
+```powershell
 py -m venv .venv
+```
+
+Isso não imprime nada se der certo; só demora alguns segundos e cria a pasta
+`.venv`.
+
+**3. Instale as dependências do projeto** dentro desse ambiente:
+
+```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+```
+
+Espere terminar — você vai ver várias linhas `Collecting...`/`Installing...`
+e, no fim, algo como `Successfully installed streamlit-... gitpython-...`.
+Isso pode levar 1–2 minutos na primeira vez.
+
+**4. Rode os testes automatizados**, para confirmar que tudo foi instalado
+certo:
+
+```powershell
 .\.venv\Scripts\python.exe -m pytest -q
+```
+
+Se aparecer algo como `104 passed in Xs` (sem a palavra `failed`), está tudo
+certo e você pode seguir. Se aparecer erro, veja
+[Problemas comuns](#problemas-comuns).
+
+**5. Inicie a aplicação:**
+
+```powershell
 .\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1
 ```
 
-Se a `.venv` já existe, comece pela instalação das dependências. Não é
-necessário ativá-la nem alterar a política de execução do PowerShell.
-Abra `http://localhost:8501`; encerre o servidor com `Ctrl+C`.
+O terminal vai mostrar algo como:
+
+```
+You can now view your Streamlit app in your browser.
+Local URL: http://127.0.0.1:8501
+```
+
+**6. Abra esse endereço no navegador**: <http://localhost:8501>. Se o
+navegador não abrir sozinho, copie e cole o endereço manualmente. Você deve
+ver a tela **"Conectar release"**, com o menu de sete telas na lateral
+esquerda.
+
+**7. Para encerrar**, volte ao terminal onde o Streamlit está rodando e
+aperte `Ctrl+C`. O terminal volta ao prompt normal quando o servidor parou.
+
+## Rodar de novo (depois da primeira vez)
+
+Depois que você já criou a `.venv` uma vez, não repita os passos 2–4 do
+início rápido — vá direto para o essencial. Dentro da pasta do projeto:
+
+```powershell
+cd "C:\caminho\para\garantiu"
+.\.venv\Scripts\python.exe -m streamlit run app.py --server.address 127.0.0.1
+```
+
+Isso é tudo. Abra <http://localhost:8501> e `Ctrl+C` para encerrar, como
+antes. Só repita a instalação de dependências (passo 3) se você atualizar o
+`requirements.txt` ou trocar de máquina.
+
+Não é necessário ativar a `.venv` (`.\.venv\Scripts\Activate.ps1`) nem
+alterar a política de execução do PowerShell — os comandos acima chamam o
+Python de dentro da `.venv` diretamente pelo caminho completo.
+
+## Problemas comuns
+
+| Sintoma | O que fazer |
+|---|---|
+| `python : O termo 'python' não é reconhecido...` ou `py : O termo...` | Python não está instalado ou não foi adicionado ao PATH. Reinstale marcando "Add python.exe to PATH" e abra um **novo** PowerShell. |
+| `git : O termo 'git' não é reconhecido...` | Instale o Git (link acima) e abra um novo PowerShell. |
+| Comando trava/erro ao ativar a `.venv` (`não pode ser carregado porque a execução de scripts foi desabilitada`) | Não é necessário ativar a `.venv`. Use sempre `.\.venv\Scripts\python.exe -m ...` como nos comandos acima, sem ativar nada. |
+| `pip install` falha com erro de rede/timeout | Verifique sua conexão com a internet e rode o comando do passo 3 novamente; ele pode ser repetido sem problema. |
+| `streamlit run` diz que a porta 8501 já está em uso | Outro Streamlit já está rodando. Fecha o terminal antigo (`Ctrl+C` nele) ou rode nesta janela com outra porta: `... run app.py --server.address 127.0.0.1 --server.port 8502` e abra `http://localhost:8502`. |
+| Página abre em branco ou trava carregando | Confira o terminal: se não houver erro visível ali, aguarde alguns segundos (primeira renderização é mais lenta) e recarregue a página. Se persistir, `Ctrl+C` no terminal e rode o comando do passo 5 de novo. |
+| `pytest` mostra `failed` em vez de `passed` | Rode de novo isolado: `.\.venv\Scripts\python.exe -m pytest -q -k nome_do_teste_que_falhou` para ver o erro completo, e confira se os passos 2–3 foram concluídos sem erro. |
+| Analisando este próprio repositório (`.` como pasta) dá erro de referência Git | O repositório precisa ter pelo menos dois commits para comparar `HEAD~1` com `HEAD`. Se você acabou de clonar um repo com um único commit, use dois commits existentes, ou analise outro projeto. |
+| Erro de acesso a arquivo/CSV/XML/banco de dados | O caminho informado nos campos da tela "Conectar Release" está errado ou o arquivo não existe/está aberto em outro programa. Confira o caminho e tente de novo — a aplicação mostra a mensagem de erro na própria tela. |
+
+Se nada disso resolver, copie a mensagem de erro completa do terminal antes
+de pedir ajuda — ela quase sempre diz exatamente qual arquivo ou comando
+falhou.
 
 ## Usar as sete telas
 

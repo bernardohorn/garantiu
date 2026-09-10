@@ -6,6 +6,13 @@ no ar. Baseado no wireframe de 7 telas e no problema validado (`docs/superpowers
 
 ## Resumo em um parágrafo
 
+A tela Conectar release também permite marcar **Gerar JUnit com pytest ao
+analisar**. Ao analisar uma pasta local no commit selecionado e sem alterações
+pendentes, executa pytest, salva o XML na pasta escolhida e incorpora os
+resultados reais à mesma análise. Testes reprovados são aceitos como evidência;
+erro de execução interrompe a análise. A opção é inicialmente desativada e
+não executa projetos remotos nem gera incidentes.
+
 Estado implementado do filtro de arquivos: o pipeline usa apenas código de
 produto reconhecido para score e roteiro. Arquivos de suporte e tipos
 desconhecidos ficam fora do cálculo e podem ser auditados na sessão, com

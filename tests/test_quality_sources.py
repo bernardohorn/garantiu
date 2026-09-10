@@ -54,7 +54,7 @@ def test_bare_repository_returns_repo_locations_and_prefers_known_names(tmp_path
     assert found["junit"] == ["repo:reports/results.xml", "repo:z.xml"]
 
 
-@pytest.mark.parametrize("directory_name", [".venv", "sample_data", "fixtures"])
+@pytest.mark.parametrize("directory_name", [".venv", "sample_data", "fixtures", "garantiu-junit"])
 def test_ignores_non_production_candidate_directories(tmp_path, directory_name):
     project = tmp_path / "project"
     project.mkdir()

@@ -1,5 +1,25 @@
 # Implementação do plano
 
+## Geração de JUnit durante a análise — 10/09/2026
+
+Conectar release oferece **Gerar JUnit com pytest ao analisar**, inicialmente
+desativado e preservado por projeto na sessão. Quando ativado, Analisar
+mudanças executa pytest localmente, salva um XML por rodada na pasta escolhida
+e usa os resultados na análise e no histórico de testes. Exige o commit
+selecionado aberto e sem alterações pendentes; usa a `.venv` local ou o Python
+do Garantiu. O prazo de execução é de 10 minutos.
+
+Testes reprovados são evidência válida. Falhas de execução interrompem a
+análise sem novo snapshot, e XML parcial não é importado. Relatórios gerados
+ficam separados da descoberta automática. O botão Procurar novamente fica no
+final da seção opcional. CSVs de incidentes continuam manuais.
+
+Verificação: 230 testes aprovados com cobertura total de 95% e 100% no módulo
+`test_execution.py`. Inclui execuções reais de pytest, falhas, suíte vazia,
+reanálise, navegação por AppTest e persistência. O aviso de finalização de
+subprocesso `WinError 6` voltou a ocorrer em um teste Git, sem falha.
+Não houve validação visual manual nem validação de outros executores de teste.
+
 ## Incremento de classificação — 10/09/2026
 
 Concluída a fase 2 de `plano-correcao-detalhe-modulos-e-score.md`: somente

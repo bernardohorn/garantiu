@@ -12,7 +12,7 @@ import git
 IGNORED_DIRECTORIES = {
     ".git", ".hg", ".svn", ".pytest_cache", ".tox", ".venv",
     "__pycache__", "node_modules", "dist", "build", "coverage", "htmlcov",
-    "vendor", "sample_data", "examples", "fixtures",
+    "vendor", "sample_data", "examples", "fixtures", "garantiu-junit",
 }
 MAX_CANDIDATE_BYTES = 25 * 1024 * 1024
 MAX_SCANNED_FILES = 5_000

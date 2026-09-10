@@ -408,6 +408,63 @@ def test_user_can_choose_the_local_storage_folder(tmp_path):
     assert (chosen_directory / "garantiu_release_history.db").is_file()
 
 
+def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path):
+    project = tmp_path / "pytest-project"
+    project.mkdir()
+    with init_repo(project) as repo:
+        (project / "checkout").mkdir()
+        (project / "checkout/__init__.py").write_text("", encoding="utf-8")
+        (project / "checkout/test_pay.py").write_text(
+            "def test_payment():\n    assert False\n", encoding="utf-8",
+        )
+        (project / "checkout/pay.py").write_text("value = 1\n", encoding="utf-8")
+        repo.index.add(["checkout/__init__.py", "checkout/test_pay.py", "checkout/pay.py"])
+        repo.index.commit("initial")
+        (project / "checkout/pay.py").write_text("value = 2\n", encoding="utf-8")
+        repo.index.add(["checkout/pay.py"])
+        repo.index.commit("change")
+    at = AppTest.from_file("../app.py", default_timeout=30).run()
+    at.text_input[0].set_value(str(project)).run()
+    at.checkbox(key=f"generate_junit:{project}").check().run()
+    at.button(key="analyze_release").click().run()
+    assert not at.exception
+    assert not at.error
+    analysis = at.session_state.analysis
+    report = Path(analysis["junit_source"])
+    assert report.is_file()
+    assert report.is_relative_to(tmp_path / "data")
+    assert analysis["test_results"][0]["status"] == "failed"
+    assert analysis["test_health"] == {"checkout": 0.0}
+    assert analysis["sources"]["junit"] is True
+    assert (tmp_path / "data/garantiu_test_history.db").is_file()
+    assert any("reprovados" in item.value for item in at.warning)
+    at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
+    assert at.table[0].value.iloc[0]["Status"] == "failed"
+    at.sidebar.radio[0].set_value("Conectar Release").run()
+    assert at.checkbox(key=f"generate_junit:{project}").value
+    at.button(key="analyze_release").click().run()
+    assert not at.error
+    assert at.session_state.analysis["junit_source"] != str(report)
+    assert report.is_file()
+
+
+def test_junit_execution_error_clears_analysis_without_new_snapshot(analyzed_app, tmp_path, monkeypatch):
+    def fail(*args):
+        raise ValueError("Falha na execução de teste")
+
+    monkeypatch.setattr("garantiu.test_execution.generate_pytest_report", fail)
+    at = analyzed_app
+    repo_path = at.session_state.analysis["repo_path"]
+    history_path = str(tmp_path / "data/garantiu_release_history.db")
+    before = get_release_history(history_path, repo_key=repo_path)
+    at.checkbox(key=f"generate_junit:{at.text_input[0].value}").check().run()
+    at.button(key="analyze_release").click().run()
+    assert not at.exception
+    assert any("Falha na execução" in item.value for item in at.error)
+    assert at.session_state.analysis is None
+    assert get_release_history(history_path, repo_key=repo_path) == before
+
+
 def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
     repo_path = tmp_path / "docs-only"
     repo_path.mkdir()

@@ -32,6 +32,7 @@ from garantiu.quality_sources import (
     discover_quality_sources, discover_quality_sources_in_directory,
 )
 from garantiu.test_history import flakiness_by_module, record_test_run
+from garantiu.test_execution import generate_pytest_report
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
 from garantiu.ui import (
@@ -103,7 +104,7 @@ def render_storage_location() -> None:
         st.session_state[DATA_DIRECTORY_INPUT_KEY] = str(active_directory)
     st.markdown("#### Armazenamento local")
     st.caption(
-        "Escolha onde os bancos serão gravados. Relatórios JUnit e CSVs "
+        "Escolha onde os bancos e os JUnit gerados serão gravados. Relatórios JUnit e CSVs "
         "colocados nessa pasta também são localizados automaticamente."
     )
     st.text_input(
@@ -253,7 +254,7 @@ def connect_release():
     )
     render_section_label(
         "Origem da análise",
-        "O Garantiu lê o histórico e as mudanças sem executar o código do repositório.",
+        "O Garantiu lê as mudanças do Git e pode executar testes locais com pytest.",
     )
     repo_input = _repository_input(
         "Pasta local ou link do GitHub", "_connect_repository_input",
@@ -286,11 +287,6 @@ def connect_release():
                 st.success(f"{total_found} arquivo(s) de qualidade encontrado(s) no projeto.")
             else:
                 st.info("Nenhum relatório JUnit ou CSV de incidentes foi encontrado no projeto.")
-        st.button(
-            "Procurar novamente", key="refresh_quality_sources",
-            on_click=_refresh_quality_discovery,
-            args=(junit_key, incidents_key, incident_details_key),
-        )
         junit_path = _quality_source_input(
             "Relatório de testes (JUnit XML)",
             junit_key, discovered["junit"],
@@ -301,6 +297,23 @@ def connect_release():
             "Informa o status dos testes já executados no terminal ou na CI. "
             "JUnit não representa cobertura de código."
         )
+        generation_key = f"generate_junit:{repo_input}"
+        preference_key = f"junit_generation_preference:{repo_input}"
+        if generation_key not in st.session_state:
+            st.session_state[generation_key] = st.session_state.get(preference_key, False)
+        generate_junit = st.checkbox(
+            "Gerar JUnit com pytest ao analisar", key=generation_key,
+            help="Executa os testes da pasta local ao clicar em Analisar mudanças. "
+                 "Usa .venv do projeto, quando existente, e exige dependências instaladas. "
+                 "O novo resultado substitui o relatório informado nesta análise.",
+        )
+        st.session_state[preference_key] = generate_junit
+        if generate_junit:
+            st.caption(
+                "Os testes serão executados no computador, com limite de 10 minutos. "
+                "A pasta precisa estar no commit escolhido e sem alterações pendentes. "
+                "O XML será salvo na pasta de armazenamento local."
+            )
         incidents_path = _quality_source_input(
             "Arquivo de incidentes (CSV)",
             incidents_key, discovered["incident_counts"],
@@ -321,6 +334,11 @@ def connect_release():
         st.caption(
             "O histórico de bugs não exige arquivo: ele é extraído automaticamente "
             "das mensagens de commit do Git, como fix, bug e corrige."
+        )
+        st.button(
+            "Procurar novamente", key="refresh_quality_sources",
+            on_click=_refresh_quality_discovery,
+            args=(junit_key, incidents_key, incident_details_key),
         )
     st.caption(
         "A busca considera XMLs JUnit e CSVs com os cabeçalhos esperados. Em links "
@@ -350,9 +368,6 @@ def connect_release():
                 base_sha, base_label = resolve_comparison_base(
                     repo, base_ref, head_ref.strip(),
                 )
-                test_results = load_project_test_report(
-                    repo, head_sha, junit_path,
-                )
                 incidents = (
                     load_project_incidents(repo, head_sha, incidents_path)
                     if incidents_path.strip() else {}
@@ -363,6 +378,19 @@ def connect_release():
                     )
                     if incident_details_path.strip() else {}
                 )
+                if generate_junit:
+                    with st.spinner("Executando pytest e salvando JUnit..."):
+                        execution = generate_pytest_report(repo, head_sha, _active_data_directory())
+                    junit_path = execution["path"]
+                    test_results = execution["results"]
+                    st.session_state.pop(QUALITY_DISCOVERY_KEY, None)
+                    if execution["exit_code"] == 1:
+                        st.warning("Há testes reprovados. O resultado foi incluído na análise.")
+                    elif execution["exit_code"] == 5:
+                        st.warning("O pytest não encontrou testes. O JUnit salvo está vazio.")
+                    st.success(f"JUnit gerado e salvo em: {junit_path}")
+                else:
+                    test_results = load_project_test_report(repo, head_sha, junit_path)
             all_changed_files = get_changed_files(
                 source.path, base_sha, head_sha,
             )
@@ -547,13 +575,12 @@ def automated_suite(analysis):
     if not analysis.get("junit_source"):
         st.info(
             "Nenhum relatório de testes foi fornecido para este projeto. "
-            "Em Conectar Release, informe um JUnit local ou "
-            "repo:reports/junit.xml e clique em Analisar mudanças."
+            "Em Conectar Release, ative Gerar JUnit com pytest ao analisar "
+            "ou informe um relatório e clique em Analisar mudanças."
         )
         st.caption(
-            "Gere o relatório no seu terminal ou CI. Para projetos com pytest: "
-            "python -m pytest --junitxml=relatorio.xml. "
-            "O Garantiu não executa automaticamente o código do repositório."
+            "Também é possível gerar o relatório no terminal ou CI. Com pytest: "
+            "python -m pytest --junitxml=relatorio.xml."
         )
         return
     st.caption(f"Relatório utilizado: {analysis['junit_source']}")
@@ -562,8 +589,8 @@ def automated_suite(analysis):
         analysis["flakiness"],
     )
     st.caption(
-        "Ordem recomendada a partir do relatório importado. "
-        "A execução dos testes acontece no seu terminal ou CI."
+        "Ordem recomendada a partir do relatório utilizado na análise. "
+        "Para executar novamente com pytest, volte a Conectar Release."
     )
     if not ordered:
         st.info("O relatório não contém testes.")

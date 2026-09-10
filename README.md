@@ -243,6 +243,33 @@ projeto informado e à pasta definida em **Armazenamento local**, e pode ser
 repetida pelo botão **Procurar novamente**. Essa configuração fica dentro da
 área **Resultados de testes e incidentes — opcional**.
 
+Para gerar o relatório junto com a análise, marque **Gerar JUnit com pytest ao
+analisar** nessa área e clique em **Analisar mudanças**. A opção fica guardada
+para esse projeto durante a sessão. Ela executa os testes Python locais e usa
+o novo XML na análise, mesmo que outro relatório esteja informado no campo.
+
+O projeto precisa estar no commit selecionado, sem alterações rastreadas
+pendentes nem arquivos não rastreados (exceto a pasta de relatórios gerados).
+O executor usa `.venv/Scripts/python.exe` no Windows ou `.venv/bin/python`
+nos demais sistemas; sem `.venv`, usa o Python que executa o Garantiu. Instale
+pytest e as dependências do projeto nesse ambiente antes de analisar.
+Não há instalação automática de dependências nem execução por link do GitHub.
+
+Cada rodada salva um arquivo independente em
+`<pasta escolhida>/garantiu-junit/<identificador do projeto>/<rodada>/junit.xml`.
+Resultados anteriores são preservados. Essa pasta fica fora da descoberta
+automática para não associar resultados antigos ou de outro projeto à análise;
+o caminho gerado é mostrado na interface e pode ser importado explicitamente.
+Os caches do pytest também ficam na pasta da rodada.
+
+Testes reprovados geram um aviso e são incorporados ao histórico. Uma suíte
+sem testes gera um XML vazio e um aviso. Falhas de execução, coleta ou tempo
+limite (10 minutos) interrompem a análise, sem registrar um novo snapshot nem
+importar XML parcial. Para diagnosticar, execute `python -m pytest` no terminal
+do projeto. A geração executa código local com as permissões do processo do
+Garantiu; ela começa desativada. Os CSVs de incidentes continuam sendo entradas
+manuais.
+
 O histórico de bugs não é enviado manualmente. Ele é extraído do histórico
 Git alcançável pela referência final, procurando mensagens como `fix`, `bug` e
 `corrige`, e relacionado aos arquivos alterados. Todas as fontes adicionais
@@ -278,7 +305,7 @@ Três bancos SQLite são criados automaticamente na raiz da aplicação:
 `garantiu.db` (decisões), `garantiu_test_history.db` (testes) e
 `garantiu_release_history.db` (snapshots de scores, fatores por módulo,
 evidências de bugs, incidentes e resultados). Para escolher outro local na
-interface, abra **Armazenamento local** na barra lateral, informe a pasta e
+interface, abra **Armazenamento local** na seção de dados opcionais, informe a pasta e
 clique em **Usar esta pasta**. O Garantiu passa a utilizar esse local na sessão
 atual e cria cada banco quando houver dados daquele tipo. Também é possível definir
 `GARANTIU_DATA_DIR` antes de iniciar para estabelecer o local padrão. Faça

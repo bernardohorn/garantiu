@@ -16,6 +16,12 @@ IGNORED_DIRECTORIES = {
 }
 MAX_CANDIDATE_BYTES = 25 * 1024 * 1024
 MAX_SCANNED_FILES = 5_000
+QUALITY_TEMPLATES = {
+    "junit": ("modelo-junit.xml", '<!-- Modelo vazio: nao representa uma execucao de testes. -->\n<testsuites/>\n'),
+    "incident_counts": ("modelo-incidents.csv", "module,incident_count\n"),
+    "incident_details": ("modelo-incident_details.csv", "module,description,date\n"),
+}
+TEMPLATE_NAMES = {name for name, _ in QUALITY_TEMPLATES.values()}
 PREFERRED_NAMES = {
     "junit": ("junit.xml", "test-results.xml", "results.xml", "report.xml"),
     "incident_counts": ("incidents.csv", "incidentes.csv"),
@@ -60,6 +66,8 @@ def _candidate_sort_key(kind: str, location: str) -> tuple[int, int, str]:
 def _add_candidate(
     results: dict[str, list[str]], location: str, content: bytes,
 ) -> None:
+    if Path(location.removeprefix("repo:")).name.lower() in TEMPLATE_NAMES:
+        return
     suffix = Path(location).suffix.lower()
     for kind in _classify(content, suffix):
         results[kind].append(location)
@@ -141,3 +149,22 @@ def discover_quality_sources_in_directory(
             set(locations), key=lambda item: _candidate_sort_key(kind, item),
         )
     return results
+
+
+def create_missing_quality_templates(directory: str | Path) -> list[str]:
+    """Create clearly named empty templates without replacing existing files."""
+    root = Path(directory).expanduser().resolve()
+    root.mkdir(parents=True, exist_ok=True)
+    sources = discover_quality_sources_in_directory(root)
+    created = []
+    for kind, (name, content) in QUALITY_TEMPLATES.items():
+        if sources[kind]:
+            continue
+        path = root / name
+        try:
+            with path.open("x", encoding="utf-8", newline="") as stream:
+                stream.write(content)
+        except FileExistsError:
+            continue
+        created.append(str(path))
+    return created

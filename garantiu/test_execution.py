@@ -13,21 +13,17 @@ PYTEST_TIMEOUT_SECONDS = 600
 
 
 def generate_pytest_report(repo, ref: str, data_directory: str | Path) -> dict:
-    """Execute the checked-out commit, without a shell or dependency installation."""
+    """Execute the local working tree, retaining whether it has pending changes."""
     if repo.bare or not repo.working_tree_dir:
         raise ValueError("Para gerar JUnit, clone o projeto e informe sua pasta local.")
     if repo.head.commit.hexsha != repo.commit(ref).hexsha:
         raise ValueError("Para gerar JUnit, selecione o commit atualmente aberto na pasta local.")
     root = Path(repo.working_tree_dir).resolve()
     reports = Path(data_directory).resolve() / "garantiu-junit"
-    if repo.is_dirty(untracked_files=False):
-        raise ValueError("Salve as alterações rastreadas em um commit antes de gerar JUnit.")
-    for name in repo.untracked_files:
-        if not (root / name).resolve().is_relative_to(reports):
-            raise ValueError(
-                "Há arquivos não rastreados na pasta local. Inclua-os no commit ou "
-                "no .gitignore antes de gerar JUnit."
-            )
+    working_tree_dirty = repo.is_dirty(untracked_files=False) or any(
+        not (root / name).resolve().is_relative_to(reports)
+        for name in repo.untracked_files
+    )
     local_python = root / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     python = str(local_python) if local_python.is_file() else sys.executable
     identity = hashlib.sha256(str(root).encode()).hexdigest()[:16]
@@ -66,4 +62,7 @@ def generate_pytest_report(repo, ref: str, data_directory: str | Path) -> dict:
     except (OSError, ValueError) as exc:
         output.unlink(missing_ok=True)
         raise ValueError("O pytest não produziu um relatório JUnit válido.") from exc
-    return {"path": str(output), "exit_code": completed.returncode, "results": results}
+    return {
+        "path": str(output), "exit_code": completed.returncode,
+        "results": results, "working_tree_dirty": working_tree_dirty,
+    }

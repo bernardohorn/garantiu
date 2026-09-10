@@ -243,13 +243,24 @@ projeto informado e à pasta definida em **Armazenamento local**, e pode ser
 repetida pelo botão **Procurar novamente**. Essa configuração fica dentro da
 área **Resultados de testes e incidentes — opcional**.
 
+Ao clicar em **Usar esta pasta**, o Garantiu cria modelos para as fontes que
+não encontrar nela: `modelo-junit.xml`, `modelo-incidents.csv` e
+`modelo-incident_details.csv`. Não sobrescreve arquivos existentes. O JUnit
+modelo é vazio, e os CSVs contêm apenas os cabeçalhos; não representam testes
+executados nem incidentes reais e não são importados na análise. Para usar um
+CSV, preencha dados reais e salve uma cópia sem o prefixo `modelo-`. O JUnit
+real é produzido pela execução descrita a seguir.
+
 Para gerar o relatório junto com a análise, marque **Gerar JUnit com pytest ao
 analisar** nessa área e clique em **Analisar mudanças**. A opção fica guardada
 para esse projeto durante a sessão. Ela executa os testes Python locais e usa
 o novo XML na análise, mesmo que outro relatório esteja informado no campo.
 
-O projeto precisa estar no commit selecionado, sem alterações rastreadas
-pendentes nem arquivos não rastreados (exceto a pasta de relatórios gerados).
+O projeto precisa estar no commit selecionado. Alterações pendentes e arquivos
+novos não bloqueiam a execução: os testes avaliam o estado atual da pasta.
+Nesse caso, a interface avisa e o nome da análise registra
+`testes com alterações locais`. O diff Git continua usando os commits
+selecionados; seus números não incluem alterações ainda não commitadas.
 O executor usa `.venv/Scripts/python.exe` no Windows ou `.venv/bin/python`
 nos demais sistemas; sem `.venv`, usa o Python que executa o Garantiu. Instale
 pytest e as dependências do projeto nesse ambiente antes de analisar.
@@ -259,7 +270,8 @@ Cada rodada salva um arquivo independente em
 `<pasta escolhida>/garantiu-junit/<identificador do projeto>/<rodada>/junit.xml`.
 Resultados anteriores são preservados. Essa pasta fica fora da descoberta
 automática para não associar resultados antigos ou de outro projeto à análise;
-o caminho gerado é mostrado na interface e pode ser importado explicitamente.
+o caminho gerado é mostrado na interface, com **Baixar JUnit gerado**, e pode
+ser importado explicitamente.
 Os caches do pytest também ficam na pasta da rodada.
 
 Testes reprovados geram um aviso e são incorporados ao histórico. Uma suíte

@@ -1,13 +1,33 @@
 # Implementação do plano
 
+## Correção da geração e modelos de dados — 10/09/2026
+
+A geração de JUnit durante a análise aceita o estado atual da pasta local,
+inclusive alterações rastreadas, preparadas ou arquivos novos. Quando isso
+ocorre, a interface e o nome da análise informam que os testes incluíram
+alterações locais; o diff continua representando apenas o intervalo Git.
+O caminho do XML gerado é exibido e há um botão para baixá-lo.
+
+Ao selecionar uma pasta de armazenamento, o Garantiu cria os modelos ausentes
+`modelo-junit.xml`, `modelo-incidents.csv` e
+`modelo-incident_details.csv`. Eles são vazios, não substituem arquivos
+existentes e são excluídos da descoberta e da análise. Para importar um CSV,
+o usuário deve preencher dados reais e salvar uma cópia sem `modelo-`.
+
+Verificação: 236 testes aprovados, 95% de cobertura total e 100% no executor
+de testes, cobrindo geração com alterações locais, download, modelos,
+preservação de arquivos existentes e exclusão dos modelos da análise. Houve
+o aviso conhecido `WinError 6` ao finalizar um subprocesso Git no Windows,
+sem falha.
+
 ## Geração de JUnit durante a análise — 10/09/2026
 
 Conectar release oferece **Gerar JUnit com pytest ao analisar**, inicialmente
 desativado e preservado por projeto na sessão. Quando ativado, Analisar
 mudanças executa pytest localmente, salva um XML por rodada na pasta escolhida
 e usa os resultados na análise e no histórico de testes. Exige o commit
-selecionado aberto e sem alterações pendentes; usa a `.venv` local ou o Python
-do Garantiu. O prazo de execução é de 10 minutos.
+selecionado aberto; alterações locais são testadas e sinalizadas. Usa a
+`.venv` local ou o Python do Garantiu. O prazo de execução é de 10 minutos.
 
 Testes reprovados são evidência válida. Falhas de execução interrompem a
 análise sem novo snapshot, e XML parcial não é importado. Relatórios gerados

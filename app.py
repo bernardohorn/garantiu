@@ -29,6 +29,7 @@ from garantiu.release_history import (
 from garantiu.scoring import score_modules, score_release
 from garantiu.repository_source import prepare_repository, repository_key
 from garantiu.quality_sources import (
+    TEMPLATE_NAMES, create_missing_quality_templates,
     discover_quality_sources, discover_quality_sources_in_directory,
 )
 from garantiu.test_history import flakiness_by_module, record_test_run
@@ -88,6 +89,7 @@ def _apply_data_directory() -> None:
     try:
         directory = _parse_data_directory(st.session_state[DATA_DIRECTORY_INPUT_KEY])
         directory.mkdir(parents=True, exist_ok=True)
+        create_missing_quality_templates(directory)
     except (OSError, ValueError) as exc:
         st.session_state[DATA_DIRECTORY_ERROR_KEY] = str(exc)
         return
@@ -125,6 +127,11 @@ def render_storage_location() -> None:
     st.caption(
         "Quando houver dados, os bancos garantiu.db, garantiu_test_history.db "
         "e garantiu_release_history.db serão salvos aqui."
+    )
+    st.caption(
+        "Ao usar a pasta, criamos os modelos JUnit e CSV que estiverem faltando, "
+        "com nomes iniciados por modelo-. Eles são vazios e não entram na análise. "
+        "Para usar um CSV, preencha dados reais e salve uma cópia sem o prefixo modelo-."
     )
 
 
@@ -213,6 +220,21 @@ def _persist_repository_input(widget_key: str) -> None:
 
 
 def _render_analysis_sources(analysis: dict) -> None:
+    if analysis.get("junit_generated"):
+        st.caption("JUnit gerado nesta análise:")
+        st.code(analysis["junit_source"], language=None)
+        if analysis.get("test_working_tree_dirty"):
+            st.warning(
+                "Os testes incluem alterações locais ainda não commitadas. "
+                "O diff e o score de mudanças continuam usando o intervalo Git selecionado."
+            )
+        report = Path(analysis["junit_source"])
+        if report.is_file():
+            st.download_button(
+                "Baixar JUnit gerado", data=report.read_bytes(),
+                file_name="junit.xml", mime="application/xml",
+                key="download_generated_junit",
+            )
     sources = analysis.get("sources", {})
     render_section_label(
         "Fontes desta análise",
@@ -311,7 +333,7 @@ def connect_release():
         if generate_junit:
             st.caption(
                 "Os testes serão executados no computador, com limite de 10 minutos. "
-                "A pasta precisa estar no commit escolhido e sem alterações pendentes. "
+                "A pasta precisa estar no commit escolhido; alterações locais entram nos testes. "
                 "O XML será salvo na pasta de armazenamento local."
             )
         incidents_path = _quality_source_input(
@@ -353,6 +375,7 @@ def connect_release():
             _render_excluded_files(st.session_state.analysis)
         return
     st.session_state.analysis = None
+    test_working_tree_dirty = False
     repo_path = repo_input.strip()
     if not repo_path:
         st.error("Informe a pasta local ou o link do GitHub antes de analisar.")
@@ -361,6 +384,12 @@ def connect_release():
         st.error("Informe as duas referências Git da comparação.")
         return
     with st.spinner("Lendo mudanças, testes e histórico..."):
+        for location in (incidents_path, incident_details_path, "" if generate_junit else junit_path):
+            if Path(location.removeprefix("repo:")).name.lower() in TEMPLATE_NAMES:
+                raise ValueError(
+                    "Arquivos modelo- são apenas modelos vazios. Preencha dados reais "
+                    "e salve com outro nome, ou ative a geração do JUnit."
+                )
         with prepare_repository(repo_path) as source:
             repo_key = source.key
             with git.Repo(source.path) as repo:
@@ -383,6 +412,7 @@ def connect_release():
                         execution = generate_pytest_report(repo, head_sha, _active_data_directory())
                     junit_path = execution["path"]
                     test_results = execution["results"]
+                    test_working_tree_dirty = execution["working_tree_dirty"]
                     st.session_state.pop(QUALITY_DISCOVERY_KEY, None)
                     if execution["exit_code"] == 1:
                         st.warning("Há testes reprovados. O resultado foi incluído na análise.")
@@ -428,6 +458,8 @@ def connect_release():
         )
         release = score_release(module_scores)
         release_name = f"{head_ref.strip()} @ {base_label}..{head_sha[:8]}"
+        if test_working_tree_dirty:
+            release_name += " · testes com alterações locais"
         analysis_id = record_release_analysis(
             release_history_db, release_name, release["score"], module_scores,
             bug_evidence, incidents, incident_details,
@@ -443,6 +475,8 @@ def connect_release():
             "changed_files": changed_files, "module_scores": module_scores,
             "release": release, "test_results": test_results,
             "junit_source": junit_path.strip(),
+            "junit_generated": generate_junit,
+            "test_working_tree_dirty": test_working_tree_dirty,
             "test_health": test_health, "flakiness": flakiness,
             "bug_details": bug_details, "incident_details": incident_details,
             "sources": {

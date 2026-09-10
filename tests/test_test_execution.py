@@ -53,20 +53,29 @@ def test_empty_suite_is_explicit(project, tmp_path):
     assert result["results"] == []
 
 
-@pytest.mark.parametrize("problem", ["dirty", "untracked", "different_ref"])
-def test_rejects_code_that_does_not_match_selected_commit(project, tmp_path, problem):
+def test_rejects_different_selected_commit(project, tmp_path):
     ref = project.head.commit.hexsha
     root = Path(project.working_tree_dir)
-    if problem == "untracked":
-        (root / "conftest.py").write_text("# untracked", encoding="utf-8")
-    else:
-        (root / "test_example.py").write_text("# changed", encoding="utf-8")
-        if problem == "different_ref":
-            project.index.add(["test_example.py"])
-            project.index.commit("new commit")
+    (root / "test_example.py").write_text("# changed", encoding="utf-8")
+    project.index.add(["test_example.py"])
+    project.index.commit("new commit")
     with pytest.raises(ValueError):
         generate_pytest_report(project, ref, tmp_path / "data")
     assert not (tmp_path / "data").exists()
+
+
+@pytest.mark.parametrize("pending", ["unstaged", "staged", "untracked"])
+def test_runs_local_changes_and_identifies_working_tree(project, tmp_path, pending):
+    root = Path(project.working_tree_dir)
+    name = "test_new.py" if pending == "untracked" else "test_example.py"
+    (root / name).write_text("def test_local():\n    assert False\n", encoding="utf-8")
+    if pending == "staged":
+        project.index.add([name])
+    result = generate_pytest_report(project, "HEAD", tmp_path / "data")
+    assert result["working_tree_dirty"] is True
+    assert result["exit_code"] == 1
+    assert any(case["name"] == "test_local" and case["status"] == "failed" for case in result["results"])
+    assert Path(result["path"]).is_file()
 
 
 def test_bare_repository_requires_local_clone(project, tmp_path):

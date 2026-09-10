@@ -408,7 +408,8 @@ def test_user_can_choose_the_local_storage_folder(tmp_path):
     assert (chosen_directory / "garantiu_release_history.db").is_file()
 
 
-def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path):
+@pytest.mark.parametrize("pending_changes", [False, True])
+def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path, pending_changes):
     project = tmp_path / "pytest-project"
     project.mkdir()
     with init_repo(project) as repo:
@@ -423,6 +424,8 @@ def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path):
         (project / "checkout/pay.py").write_text("value = 2\n", encoding="utf-8")
         repo.index.add(["checkout/pay.py"])
         repo.index.commit("change")
+        if pending_changes:
+            (project / "checkout/pay.py").write_text("value = 3\n", encoding="utf-8")
     at = AppTest.from_file("../app.py", default_timeout=30).run()
     at.text_input[0].set_value(str(project)).run()
     at.checkbox(key=f"generate_junit:{project}").check().run()
@@ -436,6 +439,9 @@ def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path):
     assert analysis["test_results"][0]["status"] == "failed"
     assert analysis["test_health"] == {"checkout": 0.0}
     assert analysis["sources"]["junit"] is True
+    assert analysis["test_working_tree_dirty"] is pending_changes
+    assert ("testes com alterações locais" in analysis["release_name"]) is pending_changes
+    assert at.download_button(key="download_generated_junit").label == "Baixar JUnit gerado"
     assert (tmp_path / "data/garantiu_test_history.db").is_file()
     assert any("reprovados" in item.value for item in at.warning)
     at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
@@ -446,6 +452,21 @@ def test_analysis_generates_and_consumes_junit_in_selected_folder(tmp_path):
     assert not at.error
     assert at.session_state.analysis["junit_source"] != str(report)
     assert report.is_file()
+
+
+def test_choosing_empty_storage_creates_models_and_does_not_import_them(tmp_path):
+    from garantiu.quality_sources import TEMPLATE_NAMES
+
+    folder = tmp_path / "empty-storage"
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input(key="data_directory_input").set_value(str(folder))
+    at.button(key="apply_data_directory").click().run()
+    assert not at.exception
+    assert not at.error
+    assert {p.name for p in folder.iterdir()} == TEMPLATE_NAMES
+    assert all(not field.value for field in at.text_input[3:6])
+    at.button(key="apply_data_directory").click().run()
+    assert not at.error
 
 
 def test_junit_execution_error_clears_analysis_without_new_snapshot(analyzed_app, tmp_path, monkeypatch):

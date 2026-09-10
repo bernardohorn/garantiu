@@ -1,5 +1,20 @@
 # Plano de implementação — detalhe dos módulos, fatores de risco e filtro de código
 
+## Progresso em 10/09/2026 — primeiro incremento
+
+Concluído: classificador `classify_changed_path()` em `garantiu/git_reader.py`,
+com categorias, motivos, precedência centralizada e exclusão de tipos
+desconhecidos. O filtro legado `is_documentation_change()` foi preservado.
+Os testes cobrem categorias, linguagens reconhecidas, caminhos Windows e
+renomes entre código e diretórios de teste.
+
+Pendente: conectar a classificação ao pipeline e à lista auditável de
+arquivos excluídos; concluir as fases de binários, bugs, testes, incidentes,
+score v2, persistência, exportações e interface. Este incremento disponibiliza
+o classificador; a análise ainda usa o filtro anterior de documentação e
+o algoritmo de score anterior. As caixas abaixo continuam indicando o aceite
+completo de cada fase, ainda pendente.
+
 ## Objetivo
 
 Corrigir três problemas observados na análise de releases:

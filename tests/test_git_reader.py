@@ -1,7 +1,8 @@
 import pytest
 
 from garantiu.git_reader import (
-    get_changed_files, is_documentation_change, resolve_comparison_base,
+    classify_changed_path, get_changed_files, is_documentation_change,
+    resolve_comparison_base,
 )
 from tests.conftest import init_repo
 
@@ -152,3 +153,86 @@ def test_documentation_changes_are_classified(path):
 ])
 def test_product_changes_are_not_classified_as_documentation(path):
     assert not is_documentation_change(path)
+
+
+@pytest.mark.parametrize("path,category", [
+    ("garantiu/scoring.py", "product_code"),
+    ("src/styles.css", "product_code"),
+    ("src/requirements.py", "product_code"),
+    ("tests/test_scoring.py", "test_code"),
+    ("src/__tests__/scoring.ts", "test_code"),
+    ("src/scoring.spec.ts", "test_code"),
+    ("src/scoring.test.js", "test_code"),
+    ("src/scoring_test.go", "test_code"),
+    ("README.md", "documentation"),
+    ("docs/example.py", "documentation"),
+    ("manual.pdf", "documentation"),
+    (".gitignore", "repository_meta"),
+    (".gitattributes", "repository_meta"),
+    (".editorconfig", "repository_meta"),
+    (".github/workflows/ci.yml", "repository_meta"),
+    (".gitlab/pipeline.py", "repository_meta"),
+    (".circleci/config.yml", "repository_meta"),
+    (".streamlit/config.toml", "configuration"),
+    ("config/settings.yaml", "configuration"),
+    (".env.local", "configuration"),
+    ("package.json", "dependency_metadata"),
+    ("package-lock.json", "dependency_metadata"),
+    ("requirements-dev.txt", "dependency_metadata"),
+    ("pyproject.toml", "dependency_metadata"),
+    ("assets/logo.png", "asset"),
+    ("assets/font.woff2", "asset"),
+    ("assets/movie.mp4", "asset"),
+    ("dist/main.js", "generated_or_vendor"),
+    ("build/main.py", "generated_or_vendor"),
+    ("vendor/library.py", "generated_or_vendor"),
+    ("node_modules/pkg/index.js", "generated_or_vendor"),
+    (".venv/library.py", "generated_or_vendor"),
+    ("src/__pycache__/source.py", "generated_or_vendor"),
+    ("examples/example.py", "generated_or_vendor"),
+    ("sample_data/sample.py", "quality_data"),
+    ("fixtures/example.py", "quality_data"),
+    ("reports/junit.xml", "quality_data"),
+    ("reports/incidents.csv", "quality_data"),
+    ("coverage/report.html", "quality_data"),
+    ("htmlcov/index.html", "quality_data"),
+    ("src/file.unrecognized", "unknown"),
+    ("unrecognized", "unknown"),
+    ("SRC\\TESTS\\example.PY", "test_code"),
+])
+def test_classify_changed_path_categories_and_precedence(path, category):
+    classification = classify_changed_path(path)
+    assert classification["category"] == category
+    assert classification["include_in_risk"] is (category == "product_code")
+    assert classification["reason"]
+
+
+@pytest.mark.parametrize("suffix", [
+    "py", "js", "jsx", "ts", "tsx", "java", "kt", "go", "rs", "rb",
+    "php", "cs", "c", "cpp", "swift", "dart", "vue", "svelte", "html",
+    "css", "sass", "less", "sql", "sh", "ps1", "bat",
+])
+def test_classify_recognized_product_languages(suffix):
+    assert classify_changed_path(f"src/main.{suffix}")["include_in_risk"]
+
+
+@pytest.mark.parametrize("old_path,new_path,expected", [
+    ("tests/example.py", "src/example.py", "product_code"),
+    ("src/example.py", "tests/example.py", "test_code"),
+])
+def test_classification_uses_renamed_destination(tmp_path, old_path, new_path, expected):
+    with init_repo(tmp_path) as repo:
+        original = tmp_path / old_path
+        original.parent.mkdir()
+        original.write_text("def example():\n    return 1\n", encoding="utf-8")
+        repo.index.add([old_path])
+        repo.index.commit("initial")
+        (tmp_path / new_path).parent.mkdir()
+        repo.index.move([old_path, new_path])
+        repo.index.commit("move source")
+
+        changes = get_changed_files(str(tmp_path), "HEAD~1", "HEAD")
+
+    assert len(changes) == 1
+    assert changes[0]["path"] == new_path
+    assert classify_changed_path(changes[0]["path"])["category"] == expected

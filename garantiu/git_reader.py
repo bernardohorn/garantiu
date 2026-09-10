@@ -7,6 +7,59 @@ AUTO_BASE_REF = "AUTO"
 _DOCUMENTATION_SUFFIXES = {
     ".md", ".mdx", ".pdf", ".rst", ".txt", ".adoc",
 }
+PRODUCT_CODE_SUFFIXES = {
+    ".py", ".js", ".jsx", ".ts", ".tsx", ".java", ".kt", ".kts",
+    ".go", ".rs", ".rb", ".php", ".cs", ".c", ".h", ".cc", ".cpp",
+    ".cxx", ".hpp", ".swift", ".dart", ".vue", ".svelte", ".html",
+    ".htm", ".css", ".scss", ".sass", ".less", ".sql", ".sh", ".bash",
+    ".zsh", ".ps1", ".bat", ".cmd",
+}
+TEST_DIRECTORIES = {"test", "tests", "__tests__", "spec", "specs"}
+IGNORED_DIRECTORIES = {
+    ".github": "repository_meta", ".gitlab": "repository_meta",
+    ".circleci": "repository_meta", ".streamlit": "configuration",
+    "docs": "documentation", "doc": "documentation",
+    "sample_data": "quality_data", "examples": "generated_or_vendor",
+    "fixtures": "quality_data", "dist": "generated_or_vendor",
+    "build": "generated_or_vendor", "coverage": "quality_data",
+    "htmlcov": "quality_data", "vendor": "generated_or_vendor",
+    "node_modules": "generated_or_vendor", ".venv": "generated_or_vendor",
+    "venv": "generated_or_vendor", "__pycache__": "generated_or_vendor",
+    ".pytest_cache": "generated_or_vendor", ".mypy_cache": "generated_or_vendor",
+}
+SPECIAL_FILE_CATEGORIES = {
+    ".gitignore": "repository_meta", ".gitattributes": "repository_meta",
+    ".editorconfig": "repository_meta", ".dockerignore": "repository_meta",
+    "package.json": "dependency_metadata", "package-lock.json": "dependency_metadata",
+    "yarn.lock": "dependency_metadata", "pnpm-lock.yaml": "dependency_metadata",
+    "pyproject.toml": "dependency_metadata", "poetry.lock": "dependency_metadata",
+    "requirements.txt": "dependency_metadata", "pipfile": "dependency_metadata",
+    "pipfile.lock": "dependency_metadata", "cargo.toml": "dependency_metadata",
+    "cargo.lock": "dependency_metadata", "go.mod": "dependency_metadata",
+    "go.sum": "dependency_metadata", "gemfile": "dependency_metadata",
+    "gemfile.lock": "dependency_metadata", "composer.json": "dependency_metadata",
+    "composer.lock": "dependency_metadata", "pom.xml": "dependency_metadata",
+    "build.gradle": "dependency_metadata", "build.gradle.kts": "dependency_metadata",
+    "dockerfile": "configuration", "makefile": "configuration",
+}
+ASSET_SUFFIXES = {
+    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico", ".bmp",
+    ".woff", ".woff2", ".ttf", ".otf", ".mp3", ".wav", ".ogg", ".mp4",
+    ".mov", ".avi", ".webm",
+}
+QUALITY_DATA_SUFFIXES = {".xml", ".csv", ".lcov"}
+CONFIGURATION_SUFFIXES = {".yml", ".yaml", ".toml", ".ini", ".cfg", ".conf"}
+CATEGORY_REASONS = {
+    "test_code": "Código de teste não representa diretamente código de produto.",
+    "documentation": "Documentação não participa do cálculo de risco de código.",
+    "repository_meta": "Metadado do repositório excluído do cálculo.",
+    "configuration": "Arquivo de configuração excluído do cálculo.",
+    "dependency_metadata": "Manifesto ou lockfile de dependência excluído.",
+    "asset": "Asset binário ou visual excluído do cálculo.",
+    "generated_or_vendor": "Arquivo gerado, cache ou código de terceiro excluído.",
+    "quality_data": "Relatório ou dado de qualidade usado apenas como evidência.",
+    "unknown": "Tipo de arquivo não reconhecido como código de produto.",
+}
 
 
 def _resolve_renamed_path(path: str) -> str:
@@ -59,12 +112,57 @@ def resolve_comparison_base(
 
 
 def is_documentation_change(path: str) -> bool:
-    """Return whether a changed path is documentation-only."""
+    """Legacy filter retained until the analysis adopts the full classifier."""
     normalized = path.replace("\\", "/").lower()
     if normalized.startswith("docs/"):
         return True
     suffix = "." + normalized.rsplit(".", 1)[-1] if "." in normalized else ""
     return suffix in _DOCUMENTATION_SUFFIXES
+
+
+def classify_changed_path(path: str) -> dict:
+    """Classify a resolved Git path and decide whether it contributes to risk."""
+    normalized = path.replace("\\", "/").strip("/")
+    lowered = normalized.lower()
+    parts = [part for part in lowered.split("/") if part]
+    name = parts[-1] if parts else ""
+    suffix = "." + name.rsplit(".", 1)[-1] if "." in name else ""
+
+    for part in parts[:-1]:
+        if part in IGNORED_DIRECTORIES:
+            category = IGNORED_DIRECTORIES[part]
+            return {
+                "category": category, "include_in_risk": False,
+                "reason": CATEGORY_REASONS[category],
+            }
+    if name in SPECIAL_FILE_CATEGORIES or (
+        name.startswith("requirements") and suffix == ".txt"
+    ):
+        category = SPECIAL_FILE_CATEGORIES.get(name, "dependency_metadata")
+    elif any(part in TEST_DIRECTORIES for part in parts[:-1]) or (
+        name.startswith("test_") or name.endswith("_test" + suffix)
+        or ".spec." in name or ".test." in name
+    ):
+        category = "test_code"
+    elif suffix in _DOCUMENTATION_SUFFIXES:
+        category = "documentation"
+    elif suffix in ASSET_SUFFIXES:
+        category = "asset"
+    elif suffix in QUALITY_DATA_SUFFIXES or name in {".coverage", "coverage.json"}:
+        category = "quality_data"
+    elif suffix in CONFIGURATION_SUFFIXES or name.startswith(".env"):
+        category = "configuration"
+    elif suffix in PRODUCT_CODE_SUFFIXES:
+        return {
+            "category": "product_code", "include_in_risk": True,
+            "reason": "Código de produto reconhecido.",
+        }
+    else:
+        category = "unknown"
+    return {
+        "category": category, "include_in_risk": False,
+        "reason": CATEGORY_REASONS[category],
+    }
 
 
 def get_changed_files(repo_path: str, base_ref: str, head_ref: str) -> list[dict]:

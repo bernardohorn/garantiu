@@ -10,7 +10,9 @@ from junitparser import JUnitXmlError
 
 from garantiu.bug_history import bug_history_detail_by_module, build_bug_history
 from garantiu.decision_log import get_decision_history, record_decision
-from garantiu.git_reader import get_changed_files
+from garantiu.git_reader import (
+    get_changed_files, is_documentation_change, resolve_comparison_base,
+)
 from garantiu.incidents import load_incident_details, load_incidents
 from garantiu.manual_test_guide import build_module_card
 from garantiu.module_detail import build_module_detail
@@ -55,7 +57,11 @@ def connect_release():
         help="Ex.: C:\\Projetos\\meu-sistema ou https://github.com/usuario/projeto",
         on_change=lambda: st.session_state.update(analysis=None),
     )
-    base_ref = st.text_input("Comparar desde", value="HEAD~1")
+    base_ref = st.text_input(
+        "Comparar desde", value="AUTO",
+        help="AUTO usa a última tag anterior à branch escolhida. Sem tags, "
+             "usa o primeiro commit alcançável.",
+    )
     head_ref = st.text_input("Branch do release", value="HEAD")
     with st.expander("Dados adicionais de qualidade (opcional)"):
         st.caption(
@@ -90,12 +96,24 @@ def connect_release():
         with prepare_repository(repo_path) as source:
             repo_key = source.key
             with git.Repo(source.path) as repo:
-                base_sha = repo.commit(base_ref.strip()).hexsha
                 head_sha = repo.commit(head_ref.strip()).hexsha
+                base_sha, base_label = resolve_comparison_base(
+                    repo, base_ref, head_ref.strip(),
+                )
                 test_results = load_project_test_report(
                     repo, head_sha, junit_path,
                 )
-            changed_files = get_changed_files(source.path, base_sha, head_sha)
+            all_changed_files = get_changed_files(
+                source.path, base_sha, head_sha,
+            )
+            documentation_files = [
+                change for change in all_changed_files
+                if is_documentation_change(change["path"])
+            ]
+            changed_files = [
+                change for change in all_changed_files
+                if not is_documentation_change(change["path"])
+            ]
             bug_history = build_bug_history(source.path, ref=head_sha)
             bug_details = {
                 module: bug_history_detail_by_module(
@@ -120,13 +138,16 @@ def connect_release():
             changed_files, bug_history, test_health, incidents, flakiness,
         )
         release = score_release(module_scores)
-        release_name = f"{head_ref.strip()} @ {base_sha}..{head_sha}"
+        release_name = f"{head_ref.strip()} @ {base_label}..{head_sha[:8]}"
         record_release_score(
             RELEASE_HISTORY_DB, release_name, release["score"],
             repo_key=repo_key,
         )
         st.session_state.analysis = {
             "release_name": release_name, "repo_path": repo_key,
+            "comparison_base": base_label,
+            "all_changed_files": all_changed_files,
+            "documentation_files": documentation_files,
             "changed_files": changed_files, "module_scores": module_scores,
             "release": release, "test_results": test_results,
             "junit_source": junit_path.strip(),
@@ -135,11 +156,21 @@ def connect_release():
         }
         st.session_state.history_repo = repo_key
     st.success(
-        f"{len(changed_files)} arquivo(s) analisado(s) "
-        f"em {len(module_scores)} módulo(s)."
+        f"{len(changed_files)} arquivo(s) de produto analisado(s) "
+        f"em {len(module_scores)} módulo(s), dentro de "
+        f"{len(all_changed_files)} alteração(ões) no intervalo."
     )
+    if documentation_files:
+        st.info(
+            f"{len(documentation_files)} arquivo(s) apenas de documentação "
+            "foram identificados e não influenciaram o score de risco."
+        )
     if not changed_files:
-        st.info("Não há mudanças entre as referências selecionadas.")
+        st.warning(
+            "O intervalo não contém mudanças de produto para analisar. "
+            "Escolha outra referência base se esperava alterações de código "
+            "ou configuração."
+        )
 
 
 def risk_overview(analysis):

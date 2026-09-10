@@ -244,6 +244,32 @@ def test_default_analysis_has_no_fictitious_test_results(tmp_path):
     assert "Nenhum relatório" in at.info[0].value
 
 
+def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
+    repo_path = tmp_path / "docs-only"
+    repo_path.mkdir()
+    repo = init_repo(repo_path)
+    readme = repo_path / "README.md"
+    readme.write_text("initial\n", encoding="utf-8")
+    repo.index.add(["README.md"])
+    repo.index.commit("initial")
+    readme.write_text("initial\nmore docs\n", encoding="utf-8")
+    repo.index.add(["README.md"])
+    repo.index.commit("docs: update readme")
+    repo.close()
+
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input[0].set_value(str(repo_path)).run()
+    at.button[0].click().run()
+
+    assert not at.exception
+    assert not at.error
+    assert at.session_state.analysis["changed_files"] == []
+    assert len(at.session_state.analysis["documentation_files"]) == 1
+    assert at.session_state.analysis["release"]["score"] == 0
+    assert any("não influenciaram" in item.value for item in at.info)
+    assert any("não contém mudanças de produto" in item.value for item in at.warning)
+
+
 def test_switching_repository_clears_report_and_stale_analysis(analyzed_app):
     at = analyzed_app
     assert at.text_input[3].value

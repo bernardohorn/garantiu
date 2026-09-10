@@ -1,6 +1,8 @@
 import pytest
 
-from garantiu.git_reader import get_changed_files
+from garantiu.git_reader import (
+    get_changed_files, is_documentation_change, resolve_comparison_base,
+)
 from tests.conftest import init_repo
 
 
@@ -86,3 +88,48 @@ def test_get_changed_files_uses_filename_as_module_at_repo_root(tmp_path):
 
     changes = get_changed_files(str(repo_path), "v1.0.0", "HEAD")
     assert changes[0]["module"] == "README.md"
+
+
+def test_automatic_base_uses_latest_tag_before_head(sample_repo):
+    import git
+
+    with git.Repo(sample_repo) as repo:
+        base_sha, label = resolve_comparison_base(repo, "AUTO", "HEAD")
+
+        assert label == "v1.0.0"
+        assert base_sha == repo.commit("v1.0.0").hexsha
+
+
+def test_automatic_base_falls_back_to_first_commit_without_tags(tmp_path):
+    import git
+
+    repo_path = tmp_path / "repo-auto"
+    repo_path.mkdir()
+    repo = init_repo(repo_path)
+    source = repo_path / "app.py"
+    source.write_text("print('v1')\n", encoding="utf-8")
+    repo.index.add(["app.py"])
+    root = repo.index.commit("initial")
+    source.write_text("print('v2')\n", encoding="utf-8")
+    repo.index.add(["app.py"])
+    repo.index.commit("change code")
+
+    base_sha, label = resolve_comparison_base(repo, "", "HEAD")
+
+    assert base_sha == root.hexsha
+    assert label == f"primeiro commit ({root.hexsha[:8]})"
+    repo.close()
+
+
+@pytest.mark.parametrize("path", [
+    "README.md", "docs/architecture.png", "guide.rst", "notes.txt",
+])
+def test_documentation_changes_are_classified(path):
+    assert is_documentation_change(path)
+
+
+@pytest.mark.parametrize("path", [
+    "app.py", "src/main.ts", "config/settings.toml", ".github/workflows/ci.yml",
+])
+def test_product_changes_are_not_classified_as_documentation(path):
+    assert not is_documentation_change(path)

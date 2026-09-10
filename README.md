@@ -134,7 +134,7 @@ Python de dentro da `.venv` diretamente pelo caminho completo.
 | `streamlit run` diz que a porta 8501 já está em uso | Outro Streamlit já está rodando. Fecha o terminal antigo (`Ctrl+C` nele) ou rode nesta janela com outra porta: `... run app.py --server.address 127.0.0.1 --server.port 8502` e abra `http://localhost:8502`. |
 | Página abre em branco ou trava carregando | Confira o terminal: se não houver erro visível ali, aguarde alguns segundos (primeira renderização é mais lenta) e recarregue a página. Se persistir, `Ctrl+C` no terminal e rode o comando do passo 5 de novo. |
 | `pytest` mostra `failed` em vez de `passed` | Rode de novo isolado: `.\.venv\Scripts\python.exe -m pytest -q -k nome_do_teste_que_falhou` para ver o erro completo, e confira se os passos 2–3 foram concluídos sem erro. |
-| Analisando este próprio repositório (`.` como pasta) dá erro de referência Git | O repositório precisa ter pelo menos dois commits para comparar `HEAD~1` com `HEAD`. Se você acabou de clonar um repo com um único commit, use dois commits existentes, ou analise outro projeto. |
+| A análise mostra apenas documentação | Confira o intervalo escolhido. O modo `AUTO` usa a última tag anterior à branch e, quando não há tags, o primeiro commit alcançável. Arquivos exclusivamente de documentação são informados, mas não influenciam o score. |
 | Erro de acesso a arquivo/CSV/XML/banco de dados | O caminho informado nos campos da tela "Conectar Release" está errado ou o arquivo não existe/está aberto em outro programa. Confira o caminho e tente de novo — a aplicação mostra a mensagem de erro na própria tela. |
 
 Se nada disso resolver, copie a mensagem de erro completa do terminal antes
@@ -144,8 +144,8 @@ falhou.
 ## Usar as sete telas
 
 1. **Conectar Release:** informe uma pasta Git local ou link HTTPS do GitHub e duas referências
-   existentes (branch, tag ou commit). `.` e `HEAD~1` / `HEAD` permitem uma
-   primeira análise deste repositório, que precisa ter pelo menos dois commits.
+   existentes (branch, tag ou commit). O padrão `AUTO` / `HEAD` compara desde
+   a última tag anterior; sem tags, usa o primeiro commit alcançável.
    O diff considera os commits selecionados, não mudanças sem commit.
 2. **Visão Geral do Risco:** veja o score 0–100, seus quatro fatores, os
    módulos alterados ordenados por risco e, quando houver mais de um módulo em
@@ -176,8 +176,9 @@ No campo **Pasta local ou link do GitHub**, cole, por exemplo:
 https://github.com/bernardohorn/garantiu
 ```
 
-Use `HEAD~1` em **Comparar desde** e `HEAD` em **Branch do release** para
-comparar os últimos commits da branch padrão. Também é possível informar
+Use `AUTO` em **Comparar desde** e `HEAD` em **Branch do release** para
+comparar o conjunto acumulado da release: desde a última tag anterior ou,
+quando o repositório não tem tags, desde o primeiro commit. Também é possível informar
 branches como `main`, `release/test`, tags ou hashes existentes no remoto.
 O sufixo `.git` e uma barra final são aceitos. Links de páginas como
 `/tree/main`, `/blob/arquivo`, URLs SSH e URLs com credenciais não são aceitos;

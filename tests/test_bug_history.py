@@ -1,6 +1,7 @@
 import pytest
 
 from garantiu.bug_history import (
+    bug_evidence_for_files,
     bug_history_detail_by_module,
     build_bug_history,
     get_bug_fix_commits,
@@ -73,6 +74,14 @@ def test_bug_details_root_module_and_one_entry_for_multiple_files(tmp_path):
             "hash": commit.hexsha, "message": "fix: initial bug",
             "date": "2026-03-05",
         }]
+
+    evidence = bug_evidence_for_files(
+        str(tmp_path), {"checkout/a.py", "checkout/b.py"}
+    )
+    assert {(item["file_path"], item["hash"]) for item in evidence} == {
+        ("checkout/a.py", commit.hexsha),
+        ("checkout/b.py", commit.hexsha),
+    }
 
 
 def test_selected_ref_history_excludes_other_branch_and_later_fixes(tmp_path):

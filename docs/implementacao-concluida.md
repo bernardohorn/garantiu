@@ -47,19 +47,37 @@ pelo código e pelos testes das 14 tarefas do PDF.
 
 Instruções de execução, formatos, persistência e verificação: `../README.md`.
 
+## Ajustes de interface e persistência
+
+O roteiro `plano-ajustes-interface-persistencia.md` também foi implementado:
+
+- a marca usa somente PNGs transparentes, combinando símbolo e nome sem caixas
+  claras no tema escuro;
+- os cabeçalhos numerados foram removidos e o campo de repositório inicia vazio;
+- JUnit e os dois formatos de incidentes são explicados na primeira tela, que
+  oferece os CSVs de `sample_data/` como modelos para download;
+- cada análise grava, em uma transação, o score da release, os quatro fatores
+  por módulo, as correções relacionadas aos arquivos e os incidentes importados;
+- reanálises do mesmo intervalo são preservadas como snapshots, enquanto o
+  resumo continua exibindo somente a versão mais recente;
+- o histórico pode ser filtrado por release e módulo e exportado, em memória,
+  como CSV UTF-8 de releases, bugs ou incidentes;
+- a apresentação usa datas brasileiras, horário de São Paulo e scores com uma
+  casa decimal, sem alterar timestamps ISO ou valores numéricos persistidos.
+
 ## Validação desta entrega
 
-- `python -m pytest -q`: **78 testes passaram** (Python 3.12.10), cobrindo
-  também a nota do dev pro QA e a contagem de módulos em risco no score do
-  release, adicionadas depois da entrega inicial das 14 tarefas.
-- `python -m pytest -q --cov=garantiu --cov-report=term-missing`: **98% de
+- `python -m pytest -q`: **133 testes passaram** (Python 3.12.10), incluindo
+  migrações aditivas, rollback atômico, filtros, exportações e apresentação.
+- `python -m pytest -q --cov=garantiu --cov-report=term-missing`: **96% de
   cobertura de linha** no pacote `garantiu`.
 - Servidor Streamlit iniciado em `127.0.0.1:8502`; endpoint
   `/_stcore/health` retornou `ok`.
 - As sete telas foram exercitadas com AppTest, incluindo dados preenchidos,
   publicação/cancelamento, resultado real e nova sessão lendo o histórico.
-- Inspeção visual no navegador não realizada: nenhum navegador disponível na
-  integração desta sessão. Abra a aplicação e confira o layout localmente.
+- Inspeção visual realizada no Chrome em viewports de 1440 × 1000 e 390 × 844,
+  sem overlay de erro ou mensagens de erro do navegador. O campo inicial vazio,
+  a responsividade e a transparência dos logos foram conferidos.
 - CI (`.github/workflows/tests.yml`) roda a mesma suíte com cobertura a cada
   push/PR para `main`, sem depender de configuração local de identidade Git
   (as fixtures de teste que criam commits configuram um autor local via

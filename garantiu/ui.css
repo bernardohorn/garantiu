@@ -53,24 +53,25 @@ html, body, [class*="css"] {
   margin-bottom: 1.25rem;
 }
 
-.brand-full-crop {
-  background: #f7f7f8;
-  border: 1px solid rgba(105, 221, 226, .24);
-  border-radius: 12px;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
-  height: 170px;
-  overflow: hidden;
-  position: relative;
+.brand-logo {
+  align-items: center;
+  display: flex;
+  gap: .72rem;
+  min-height: 58px;
 }
 
-.brand-full-crop img {
-  height: auto;
-  left: 50%;
-  max-width: none;
-  position: absolute;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  width: 326px;
+.brand-logo-symbol {
+  filter: brightness(1.65) saturate(1.08);
+  height: 56px;
+  object-fit: contain;
+  width: 56px;
+}
+
+.brand-logo-wordmark {
+  filter: brightness(0) invert(1);
+  height: 28px;
+  object-fit: contain;
+  width: 132px;
 }
 
 .brand-lockup p {
@@ -87,7 +88,6 @@ html, body, [class*="css"] {
   font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
   font-size: .65rem;
   letter-spacing: .1em;
-  text-transform: uppercase;
   margin: 0 .7rem .65rem;
 }
 
@@ -140,22 +140,16 @@ html, body, [class*="css"] {
 }
 
 .sidebar-footer img {
-  background: #f7f9fb;
-  border-radius: 7px;
   box-sizing: border-box;
+  filter: brightness(0) invert(1);
   height: 32px;
   object-fit: contain;
   object-position: left center;
-  padding: 7px 9px;
   width: 124px;
 }
 
 .page-brand-symbol {
   align-items: center;
-  background: #f7f9fb;
-  border: 1px solid #d6e2ec;
-  border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
   display: flex;
   float: right;
   height: 58px;
@@ -166,12 +160,12 @@ html, body, [class*="css"] {
 
 .page-brand-symbol img {
   display: block;
+  filter: brightness(1.65) saturate(1.08);
   height: 42px;
   object-fit: contain;
   width: 42px;
 }
 
-.page-eyebrow,
 .context-label,
 .module-focus > span {
   color: #8da5bd;
@@ -180,7 +174,25 @@ html, body, [class*="css"] {
   font-weight: 650;
   letter-spacing: .1em;
   margin: 0 0 .45rem;
-  text-transform: uppercase;
+}
+
+.source-statuses {
+  display: grid;
+  gap: .5rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.source-statuses span {
+  background: var(--g-panel);
+  border: 1px solid var(--g-line);
+  border-radius: 8px;
+  color: var(--g-muted);
+  font-size: .75rem;
+  padding: .7rem .8rem;
+}
+
+.source-statuses strong {
+  color: var(--g-text);
 }
 
 [data-testid="stHeadingWithActionElements"] h1 {
@@ -546,4 +558,5 @@ hr {
   .release-context dl { gap: .6rem; }
   .release-context dl div { min-width: 0; padding-left: .6rem; }
   .risk-distribution { grid-template-columns: 1fr; }
+  .source-statuses { grid-template-columns: 1fr; }
 }

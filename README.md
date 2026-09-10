@@ -160,9 +160,10 @@ falhou.
    aprovação dos testes e flakiness do módulo.
 6. **Decisão de Publicação:** informe seu nome e registre publicar ou cancelar.
    Isso grava uma decisão de auditoria; não faz deploy.
-7. **Histórico & Tendências:** consulte scores anteriores e marque `ok` ou
-   `falhou` após observar o resultado real. O histórico pode ser consultado
-   depois de reiniciar a aplicação, informando a pasta ou o link do repositório.
+7. **Histórico & Tendências:** filtre releases, bugs e incidentes por release
+   ou módulo, exporte cada área em CSV e marque `ok` ou `falhou` após observar
+   o resultado real. O histórico continua disponível depois de reiniciar a
+   aplicação, informando a mesma pasta ou link do repositório.
 
 Os exemplos de `sample_data/` usam módulos fictícios (`checkout`, `auth`,
 `catalogo`). Eles demonstram os formatos, mas não representam os testes deste
@@ -213,12 +214,20 @@ resultados sem precisar baixar novamente o repositório.
   `classname`, `name`, status e tempo. O primeiro segmento de `classname`
   separado por ponto deve corresponder ao módulo Git. Identidades repetidas
   (`classname`, `name`) na mesma rodada são rejeitadas. Testes sem classe
-  ficam em `sem_modulo`; sem nome, em `sem_nome`.
+  ficam em `sem_modulo`; sem nome, em `sem_nome`. Esse arquivo vem de uma
+  execução no terminal ou na CI e informa resultados, não cobertura de código.
 - **Contagem de incidentes:** CSV UTF-8 com `module,incident_count`.
-  Linhas com módulo vazio ou contagem inválida/negativa são ignoradas.
+  Linhas com módulo vazio ou contagem inválida/negativa são ignoradas. A fonte
+  esperada é o histórico operacional da equipe.
 - **Detalhes de incidentes:** CSV UTF-8 com `module,description,date`;
   datas no formato `YYYY-MM-DD`. O caminho pode ficar vazio se não houver
-  detalhes. Cabeçalhos ou detalhes inválidos geram erro visível.
+  detalhes. Cabeçalhos ou detalhes inválidos geram erro visível. Os dois
+  modelos podem ser baixados diretamente na primeira tela.
+
+O histórico de bugs não é enviado manualmente. Ele é extraído do histórico
+Git alcançável pela referência final, procurando mensagens como `fix`, `bug` e
+`corrige`, e relacionado aos arquivos alterados. Todas as fontes adicionais
+são opcionais; a ausência de uma delas não comprova ausência de risco.
 
 Complexidade (linhas adicionadas/removidas), bugs e incidentes são
 normalizados de 0 a 100 relativamente aos módulos alterados naquela análise.
@@ -248,18 +257,26 @@ módulos Git. O score é relativo, não uma probabilidade calibrada de falha.
 
 Três bancos SQLite são criados automaticamente na raiz da aplicação:
 `garantiu.db` (decisões), `garantiu_test_history.db` (testes) e
-`garantiu_release_history.db` (scores e resultados). Para usar outra pasta,
-defina `GARANTIU_DATA_DIR` antes de iniciar. Faça backup dos três arquivos
-com a aplicação encerrada; para restaurar, coloque-os de volta na mesma pasta.
+`garantiu_release_history.db` (snapshots de scores, fatores por módulo,
+evidências de bugs, incidentes e resultados). Para usar outra pasta, defina
+`GARANTIU_DATA_DIR` antes de iniciar. Faça backup dos três arquivos com a
+aplicação encerrada; para restaurar, coloque-os de volta na mesma pasta.
 
 Os históricos locais são separados pelo caminho canônico do repositório.
 Para GitHub, a identidade é a URL normalizada (sem `.git` e sem distinção de
 maiúsculas/minúsculas), independente da pasta temporária. Uma pasta local e
 um link do mesmo projeto têm históricos separados. Releases
 registram a referência final e os hashes completos do intervalo comparado.
-Reanalisar o mesmo intervalo mantém as observações e apresenta o último score
-e resultado na tabela, sem duplicar a opção de release. Mover o repositório
-para outro caminho inicia um novo contexto de histórico.
+Reanalisar o mesmo intervalo cria um snapshot distinto e preserva as
+evidências anteriores. O resumo apresenta apenas o snapshot mais recente de
+cada release, sem duplicar a opção de release. Mover o repositório para outro
+caminho inicia um novo contexto de histórico.
+
+Datas e timestamps são armazenados em ISO 8601 e UTC. A interface os apresenta
+no padrão brasileiro e no fuso `America/Sao_Paulo`; scores aparecem com uma
+casa decimal e vírgula, sem alterar os valores numéricos armazenados. Os CSVs
+baixados em **Histórico & Tendências** usam UTF-8 e preservam timestamps ISO e
+scores com ponto decimal para permitir reprocessamento.
 
 Esta entrega segue as 14 tarefas de `docs/garantiu-plano-de-implementacao.pdf`.
 Não inclui autenticação multiusuário, conectores Jira, LLM, execução de testes
@@ -269,9 +286,10 @@ remota nem publicação automática. Use como aplicação local; o campo de nome
 Erros de arquivo, XML, CSV, referência Git e acesso ao banco são exibidos na
 tela. Corrija a entrada e tente novamente. Sem mudanças ou sem resultados de
 testes, as telas mostram estados vazios. Uma análise que falha limpa o resumo
-anterior para evitar decisões com dados desatualizados. Os três bancos têm
-transações independentes: uma falha de gravação posterior à importação pode
-deixar uma rodada registrada; confira a pasta de dados antes de reimportar.
+anterior para evitar decisões com dados desatualizados. Os três bancos cobrem
+domínios independentes. Dentro do histórico de releases, score, fatores por
+módulo, bugs e incidentes são gravados em uma única transação: se qualquer
+evidência for inválida, o snapshot inteiro é revertido.
 
 ## Verificação e referências
 

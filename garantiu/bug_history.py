@@ -50,3 +50,27 @@ def bug_history_detail_by_module(
                 }))
     results.sort(key=lambda item: item[0], reverse=True)
     return [detail for _, detail in results]
+
+
+def bug_evidence_for_files(
+    repo_path: str, file_paths: set[str], ref: str = "HEAD"
+) -> list[dict]:
+    """Return one persistent evidence row per matching file and fix commit."""
+    if not file_paths:
+        return []
+    results = []
+    with git.Repo(repo_path) as repo:
+        for data in get_bug_fix_commits(repo_path, ref=ref):
+            commit = repo.commit(data["hash"])
+            occurred_on = commit.committed_datetime.date().isoformat()
+            for file_path in data["files"]:
+                if file_path not in file_paths:
+                    continue
+                results.append({
+                    "module": file_path.split("/")[0],
+                    "file_path": file_path,
+                    "hash": data["hash"],
+                    "message": data["message"],
+                    "date": occurred_on,
+                })
+    return results

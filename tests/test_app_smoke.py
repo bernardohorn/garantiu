@@ -1,10 +1,11 @@
+import re
 from pathlib import Path
 
 import pytest
 from streamlit.testing.v1 import AppTest
 
 from garantiu.release_history import get_release_history
-from garantiu.ui import BRAND_FULL_PATH, BRAND_SYMBOL_PATH, BRAND_WORDMARK_PATH
+from garantiu.ui import BRAND_SYMBOL_PATH, BRAND_WORDMARK_PATH
 from tests.conftest import init_repo
 from tests.test_repository_source import remote_fixture
 
@@ -38,7 +39,7 @@ def analyzed_app(tmp_path):
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     at.text_input[0].set_value(str(repo_path)).run()
     select_fixture_reports(at)
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
     return at
@@ -48,6 +49,19 @@ def test_app_loads_without_exceptions():
     at = AppTest.from_file("../app.py", default_timeout=15)
     at.run()
     assert not at.exception
+    assert at.text_input[0].value == ""
+    assert at.session_state.repository_source == ""
+
+
+def test_blank_repository_shows_specific_error_without_creating_history(tmp_path):
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+
+    at.button(key="analyze_release").click().run()
+
+    assert not at.exception
+    assert any("Informe a pasta local" in item.value for item in at.error)
+    assert at.session_state.analysis is None
+    assert not (tmp_path / "data/garantiu_release_history.db").exists()
 
 
 def test_full_pipeline_runs_end_to_end_and_populates_risk_overview():
@@ -66,26 +80,31 @@ def test_full_pipeline_runs_end_to_end_and_populates_risk_overview():
     at.run()
     assert not at.exception
 
-    # Exercise explicit report ingestion; sample files are never defaults.
+    # Exercise explicit repository/report ingestion; nothing is prefilled.
+    at.text_input[0].set_value(str(Path(__file__).resolve().parents[1])).run()
     select_fixture_reports(at)
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert at.session_state.analysis is not None
     assert at.session_state.analysis["release"]["top_module"] is not None
+    source_html = "\n".join(item.value for item in at.markdown)
+    assert "Fontes desta análise" in source_html
+    assert "JUnit XML</strong> — Utilizada" in source_html
+    assert "Contagem de incidentes</strong> — Utilizada" in source_html
 
     at.sidebar.radio[0].set_value("Visão Geral do Risco").run()
     assert not at.exception
     assert len(at.metric) == 1
     assert at.metric[0].value != ""
-    assert at.metric[0].value.endswith("/100")
+    assert at.metric[0].value.endswith("/ 100")
 
 
 def test_risk_overview_primary_action_opens_manual_guide(analyzed_app):
     at = analyzed_app
     at.sidebar.radio[0].set_value("Visão Geral do Risco").run()
-    assert at.button[0].label == "Preparar teste manual"
+    assert at.button(key="open_manual_guide").label == "Preparar teste manual"
 
-    at.button[0].click().run()
+    at.button(key="open_manual_guide").click().run()
 
     assert at.sidebar.radio[0].value == "Roteiro de Teste Manual"
     assert at.title[0].value == "Roteiro de teste manual"
@@ -95,10 +114,16 @@ def test_all_seven_screens_without_analysis():
     at = AppTest.from_file("../app.py").run()
     screens = list(at.sidebar.radio[0].options)
     assert len(screens) == 7
+    assert at.sidebar.radio[0].label == "Etapas da release"
+    rendered_html = []
     for screen in screens:
         at.sidebar.radio[0].set_value(screen).run()
         assert not at.exception
         assert not at.error
+        rendered_html.extend(item.value for item in at.markdown)
+    combined = "\n".join(rendered_html)
+    assert not re.search(r"\b0[1-7]\s*·", combined)
+    assert "FLUXO DA RELEASE" not in combined
 
 
 def test_populated_screens_decision_and_outcome_persist(analyzed_app, tmp_path):
@@ -115,25 +140,25 @@ def test_populated_screens_decision_and_outcome_persist(analyzed_app, tmp_path):
     assert at.table[0].value.iloc[0]["Teste"] == "test_pagamento_recusado"
     at.sidebar.radio[0].set_value("Detalhe do Módulo").run()
     assert at.selectbox[0].value == "checkout"
-    assert at.table[1].value.iloc[0]["message"] == "fix: gateway"
+    assert at.table[1].value.iloc[0]["Mensagem"] == "fix: gateway"
     assert len(at.table[2].value) == 2
 
     at.sidebar.radio[0].set_value("Decisão de Publicação").run()
-    assert at.button[0].disabled
+    assert at.button(key="publish_release").disabled
     at.text_input[0].set_value("   ").run()
-    assert at.button[0].disabled
+    assert at.button(key="publish_release").disabled
     at.text_input[0].set_value("Pessoa de teste").run()
-    at.button[0].click().run()
+    at.button(key="publish_release").click().run()
     assert not at.exception
-    assert at.table[0].value.iloc[0]["decision"] == "publicar"
-    at.button[1].click().run()
-    assert at.table[0].value.iloc[0]["decision"] == "cancelar"
+    assert at.table[0].value.iloc[0]["Decisão"] == "publicar"
+    at.button(key="cancel_release").click().run()
+    assert at.table[0].value.iloc[0]["Decisão"] == "cancelar"
 
     at.sidebar.radio[0].set_value("Histórico & Tendências").run()
     at.radio(key="outcome").set_value("falhou")
-    at.button[0].click().run()
+    at.button(key="record_release_outcome").click().run()
     assert not at.exception
-    assert at.table[0].value.iloc[0]["outcome"] == "falhou"
+    assert at.table[0].value.iloc[0]["Resultado"] == "falhou"
     history = get_release_history(
         str(tmp_path / "data/garantiu_release_history.db"),
         repo_key=analysis["repo_path"],
@@ -144,7 +169,7 @@ def test_populated_screens_decision_and_outcome_persist(analyzed_app, tmp_path):
     fresh = AppTest.from_file("../app.py").run()
     fresh.sidebar.radio[0].set_value("Histórico & Tendências").run()
     fresh.text_input[0].set_value(analysis["repo_path"]).run()
-    assert fresh.table[0].value.iloc[0]["outcome"] == "falhou"
+    assert fresh.table[0].value.iloc[0]["Resultado"] == "falhou"
 
 
 def test_manual_guide_note_field_is_session_only(analyzed_app):
@@ -174,7 +199,7 @@ def test_repeated_analysis_uses_real_test_flips(analyzed_app, tmp_path):
         encoding="utf-8",
     )
     at.text_input[3].set_value(str(report))
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
     assert at.session_state.analysis["flakiness"]["checkout"] == 50.0
@@ -192,7 +217,7 @@ def test_empty_diff_and_empty_report_are_navigable(analyzed_app, tmp_path):
     report.write_text("<testsuites/>", encoding="utf-8")
     at.text_input[1].set_value("HEAD")
     at.text_input[3].set_value(str(report))
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert at.session_state.analysis["module_scores"] == []
     assert at.session_state.analysis["release_name"] != original_release
@@ -215,7 +240,7 @@ def test_empty_diff_and_empty_report_are_navigable(analyzed_app, tmp_path):
 def test_invalid_inputs_show_error_without_recording(field, value, tmp_path):
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     at.text_input[field].set_value(value)
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert at.error
     assert at.session_state.analysis is None
@@ -225,7 +250,7 @@ def test_invalid_inputs_show_error_without_recording(field, value, tmp_path):
 def test_failed_reanalysis_clears_stale_analysis(analyzed_app):
     at = analyzed_app
     at.text_input[3].set_value("missing-report.xml")
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert at.error
     assert at.session_state.analysis is None
@@ -233,8 +258,9 @@ def test_failed_reanalysis_clears_stale_analysis(analyzed_app):
 
 def test_default_analysis_has_no_fictitious_test_results(tmp_path):
     at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input[0].set_value(str(Path(__file__).resolve().parents[1])).run()
     assert all(not field.value for field in at.text_input[3:6])
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
     assert at.session_state.analysis["test_results"] == []
@@ -246,7 +272,6 @@ def test_default_analysis_has_no_fictitious_test_results(tmp_path):
 
 
 def test_brand_assets_are_present_and_rendered_in_all_three_variants():
-    assert BRAND_FULL_PATH.is_file()
     assert BRAND_SYMBOL_PATH.is_file()
     assert BRAND_WORDMARK_PATH.is_file()
 
@@ -256,10 +281,25 @@ def test_brand_assets_are_present_and_rendered_in_all_three_variants():
     html = "\n".join(item.value for item in at.markdown)
     sidebar_html = "\n".join(item.value for item in at.sidebar.markdown)
     assert 'class="page-brand-symbol"' in html
-    assert 'class="brand-full-crop"' in sidebar_html
+    assert 'class="brand-logo"' in sidebar_html
     assert 'class="sidebar-footer"' in sidebar_html
-    assert '# <div class="brand-lockup"' not in sidebar_html
+    assert "data:image/png;base64" in sidebar_html
+    assert "data:image/jpeg" not in sidebar_html
     assert not at.error
+
+
+def test_quality_inputs_explain_sources_and_offer_real_csv_templates():
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    captions = "\n".join(item.value for item in at.caption)
+
+    assert "não representa cobertura" in captions
+    assert "histórico operacional" in captions
+    assert "extraído automaticamente" in captions
+    assert "ausência de uma fonte não significa ausência de risco" in captions
+    assert [item.label for item in at.download_button] == [
+        "Baixar modelo de contagem", "Baixar modelo de detalhes",
+    ]
+    assert all(not field.value for field in at.text_input[3:6])
 
 
 def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
@@ -277,7 +317,7 @@ def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
 
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     at.text_input[0].set_value(str(repo_path)).run()
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
 
     assert not at.exception
     assert not at.error
@@ -328,7 +368,7 @@ def test_report_in_github_commit_populates_actual_suite(remote_fixture):
     at.text_input[0].set_value("https://github.com/owner/project").run()
     at.text_input[1].set_value("v1")
     at.text_input[3].set_value("repo:results.xml")
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
     at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
@@ -343,7 +383,7 @@ def test_github_analysis_all_screens_and_persistent_url_history(remote_fixture):
     at.text_input[0].set_value("https://github.com/Owner/Project.git")
     at.text_input[1].set_value("v1")
     at.text_input[2].set_value("release/test")
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert not at.error
     assert at.session_state.analysis["repo_path"] == "https://github.com/owner/project"
@@ -353,20 +393,20 @@ def test_github_analysis_all_screens_and_persistent_url_history(remote_fixture):
         assert not at.exception
         assert not at.error
     at.radio(key="outcome").set_value("ok")
-    at.button[0].click().run()
-    assert at.table[0].value.iloc[0]["outcome"] == "ok"
+    at.button(key="record_release_outcome").click().run()
+    assert at.table[0].value.iloc[0]["Resultado"] == "ok"
     fresh = AppTest.from_file("../app.py").run()
     fresh.sidebar.radio[0].set_value("Histórico & Tendências").run()
     fresh.text_input[0].set_value("https://github.com/OWNER/PROJECT.git/").run()
     assert not fresh.error
-    assert fresh.table[0].value.iloc[0]["outcome"] == "ok"
+    assert fresh.table[0].value.iloc[0]["Resultado"] == "ok"
     assert len(calls) == 1  # Reading persisted history never downloads again.
 
 
 def test_invalid_github_url_shows_error_without_analysis():
     at = AppTest.from_file("../app.py").run()
     at.text_input[0].set_value("https://github.com/owner/project/tree/main")
-    at.button[0].click().run()
+    at.button(key="analyze_release").click().run()
     assert not at.exception
     assert at.error
     assert at.session_state.analysis is None

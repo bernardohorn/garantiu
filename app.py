@@ -8,7 +8,9 @@ import git
 import streamlit as st
 from junitparser import JUnitXmlError
 
-from garantiu.bug_history import bug_history_detail_by_module, build_bug_history
+from garantiu.bug_history import (
+    bug_evidence_for_files, bug_history_detail_by_module, build_bug_history,
+)
 from garantiu.decision_log import get_decision_history, record_decision
 from garantiu.git_reader import (
     get_changed_files, is_documentation_change, resolve_comparison_base,
@@ -17,7 +19,10 @@ from garantiu.incidents import load_incident_details, load_incidents
 from garantiu.manual_test_guide import build_module_card
 from garantiu.module_detail import build_module_detail
 from garantiu.release_history import (
-    get_release_history, record_release_outcome, record_release_score,
+    BUG_EXPORT_FIELDS, INCIDENT_EXPORT_FIELDS, RELEASE_EXPORT_FIELDS,
+    get_release_bug_evidence, get_release_export_rows, get_release_history,
+    get_release_incident_evidence, record_release_analysis,
+    record_release_outcome, rows_to_csv,
 )
 from garantiu.scoring import score_modules, score_release
 from garantiu.repository_source import prepare_repository, repository_key
@@ -25,7 +30,8 @@ from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
 from garantiu.ui import (
-    BRAND_SYMBOL_PATH, inject_design_system, render_brand, render_factor_heading,
+    BRAND_SYMBOL_PATH, format_date_br, format_datetime_br, format_percent,
+    format_score, inject_design_system, render_brand, render_factor_heading,
     render_module_focus, render_page_header, render_release_context,
     render_risk_distribution, render_section_label, render_sidebar_footer,
     risk_level,
@@ -47,7 +53,7 @@ REPOSITORY_SOURCE_KEY = "repository_source"
 def _repository_input(label: str, widget_key: str, **kwargs) -> str:
     """Render a repository field backed by durable, non-widget session state."""
     if REPOSITORY_SOURCE_KEY not in st.session_state:
-        st.session_state[REPOSITORY_SOURCE_KEY] = "."
+        st.session_state[REPOSITORY_SOURCE_KEY] = ""
     if widget_key not in st.session_state:
         st.session_state[widget_key] = st.session_state[REPOSITORY_SOURCE_KEY]
     return st.text_input(
@@ -65,9 +71,31 @@ def _persist_repository_input(widget_key: str) -> None:
     st.session_state.analysis = None
 
 
+def _render_analysis_sources(analysis: dict) -> None:
+    sources = analysis.get("sources", {})
+    render_section_label(
+        "Fontes desta análise",
+        "A ausência de uma fonte opcional não significa ausência de risco.",
+    )
+    labels = (
+        ("JUnit XML", sources.get("junit"), "opcional"),
+        ("Contagem de incidentes", sources.get("incident_counts"), "opcional"),
+        ("Detalhes de incidentes", sources.get("incident_details"), "opcional"),
+        ("Histórico de bugs pelo Git", True, "automática"),
+    )
+    st.markdown(
+        "<div class='source-statuses'>" + "".join(
+            f"<span><strong>{label}</strong> — "
+            f"{'Utilizada' if used else 'Não informada'} ({kind})</span>"
+            for label, used, kind in labels
+        ) + "</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def connect_release():
     render_page_header(
-        "01 · PREPARAR RELEASE", "Conectar release",
+        "Conectar release",
         "Escolha o código e o intervalo que serão avaliados antes de calcular o risco.",
     )
     render_section_label(
@@ -84,10 +112,10 @@ def connect_release():
              "usa o primeiro commit alcançável.",
     )
     head_ref = st.text_input("Branch do release", value="HEAD")
-    with st.expander("Dados adicionais de qualidade (opcional)"):
+    with st.expander("Resultados de testes e incidentes — opcional"):
         st.caption(
             "Enriqueça a análise com resultados reais de testes e incidentes. "
-            "Sem essas fontes, o score usa somente as evidências disponíveis."
+            "A ausência de uma fonte não significa ausência de risco."
         )
         junit_path = st.text_input(
             "Relatório de testes (JUnit XML)",
@@ -95,25 +123,65 @@ def connect_release():
             help="Informe um arquivo local ou repo:reports/junit.xml para ler "
                  "um XML do commit selecionado. Deixe vazio se não houver relatório.",
         )
+        st.caption(
+            "Informa o status dos testes já executados no terminal ou na CI. "
+            "JUnit não representa cobertura de código."
+        )
         incidents_path = st.text_input(
             "Arquivo de incidentes (CSV)",
             value="", key=f"incidents_path:{repo_input}",
+        )
+        st.caption(
+            "Quantidade de incidentes por módulo, obtida do histórico operacional da equipe."
         )
         incident_details_path = st.text_input(
             "Arquivo de detalhe de incidentes (CSV, opcional)",
             value="", key=f"incident_details_path:{repo_input}",
         )
+        st.caption(
+            "Descrição e data dos incidentes, obtidas do histórico operacional da equipe."
+        )
+        template_col, detail_template_col = st.columns(2)
+        template_col.download_button(
+            "Baixar modelo de contagem",
+            data=(ROOT / "sample_data" / "incidents.csv").read_bytes(),
+            file_name="modelo-incidentes.csv",
+            mime="text/csv; charset=utf-8",
+            key="download_incident_counts_template",
+            use_container_width=True,
+        )
+        detail_template_col.download_button(
+            "Baixar modelo de detalhes",
+            data=(ROOT / "sample_data" / "incident_details.csv").read_bytes(),
+            file_name="modelo-detalhes-incidentes.csv",
+            mime="text/csv; charset=utf-8",
+            key="download_incident_details_template",
+            use_container_width=True,
+        )
+        st.caption(
+            "O histórico de bugs não exige arquivo: ele é extraído automaticamente "
+            "das mensagens de commit do Git, como fix, bug e corrige."
+        )
     st.caption(
         "Links GitHub são lidos novamente em cada análise. JUnit pode ser local "
         "ou usar repo:caminho/arquivo.xml; os arquivos CSV permanecem locais."
     )
-    if not st.button("Analisar mudanças", type="primary", use_container_width=True):
+    if not st.button(
+        "Analisar mudanças", type="primary", use_container_width=True,
+        key="analyze_release",
+    ):
+        if st.session_state.analysis:
+            _render_analysis_sources(st.session_state.analysis)
         return
     st.session_state.analysis = None
+    repo_path = repo_input.strip()
+    if not repo_path:
+        st.error("Informe a pasta local ou o link do GitHub antes de analisar.")
+        return
+    if not base_ref.strip() or not head_ref.strip():
+        st.error("Informe as duas referências Git da comparação.")
+        return
     with st.spinner("Lendo mudanças, testes e histórico..."):
-        repo_path = repo_input.strip()
-        if not repo_path or not base_ref.strip() or not head_ref.strip():
-            raise ValueError("Informe o repositório e as duas referências Git.")
         with prepare_repository(repo_path) as source:
             repo_key = source.key
             with git.Repo(source.path) as repo:
@@ -142,6 +210,9 @@ def connect_release():
                 )
                 for module in {f["module"] for f in changed_files}
             }
+            bug_evidence = bug_evidence_for_files(
+                source.path, {f["path"] for f in changed_files}, ref=head_sha,
+            )
         test_health = test_health_by_module(test_results)
         incidents = load_incidents(incidents_path.strip()) if incidents_path.strip() else {}
         incident_details = (
@@ -160,11 +231,13 @@ def connect_release():
         )
         release = score_release(module_scores)
         release_name = f"{head_ref.strip()} @ {base_label}..{head_sha[:8]}"
-        record_release_score(
-            RELEASE_HISTORY_DB, release_name, release["score"],
+        analysis_id = record_release_analysis(
+            RELEASE_HISTORY_DB, release_name, release["score"], module_scores,
+            bug_evidence, incidents, incident_details,
             repo_key=repo_key,
         )
         st.session_state.analysis = {
+            "analysis_id": analysis_id,
             "release_name": release_name, "repo_path": repo_key,
             "comparison_base": base_label,
             "all_changed_files": all_changed_files,
@@ -174,6 +247,11 @@ def connect_release():
             "junit_source": junit_path.strip(),
             "test_health": test_health, "flakiness": flakiness,
             "bug_details": bug_details, "incident_details": incident_details,
+            "sources": {
+                "junit": bool(junit_path.strip()),
+                "incident_counts": bool(incidents_path.strip()),
+                "incident_details": bool(incident_details_path.strip()),
+            },
         }
     st.success(
         f"{len(changed_files)} arquivo(s) de produto analisado(s) "
@@ -191,23 +269,24 @@ def connect_release():
             "Escolha outra referência base se esperava alterações de código "
             "ou configuração."
         )
+    _render_analysis_sources(st.session_state.analysis)
 
 
 def risk_overview(analysis):
     render_page_header(
-        "02 · AVALIAR RELEASE", "Visão geral do risco",
+        "Visão geral do risco",
         "Entenda o impacto, encontre o foco do teste e avance com evidências.",
     )
     render_release_context(analysis)
     release = analysis["release"]
     if not analysis["module_scores"]:
-        st.metric("Score de risco da release", f"{release['score']:.0f}/100")
+        st.metric("Score de risco da release", format_score(release["score"]))
         st.info("Nenhum módulo alterado neste intervalo.")
         return
     with st.container(border=True):
         score_col, distribution_col = st.columns([1.15, 1])
         with score_col:
-            st.metric("Score de risco da release", f"{release['score']:.0f}/100")
+            st.metric("Score de risco da release", format_score(release["score"]))
             level, label = risk_level(release["score"])
             st.markdown(
                 f"<strong class='risk-pill risk-{level}'>{label}</strong>",
@@ -242,7 +321,7 @@ def risk_overview(analysis):
     table_col, focus_col = st.columns([1.7, 1])
     with table_col:
         st.table([
-            {"Módulo": m["module"], "Score": m["score"],
+            {"Módulo": m["module"], "Score": format_score(m["score"]),
              "Nível": risk_level(m["score"])[1]}
             for m in analysis["module_scores"]
         ])
@@ -250,6 +329,7 @@ def risk_overview(analysis):
         render_module_focus(analysis["module_scores"][0])
         st.button(
             "Preparar teste manual", type="primary", use_container_width=True,
+            key="open_manual_guide",
             on_click=lambda: st.session_state.update(screen=SCREENS[2]),
         )
     if any(m["module"] not in analysis["test_health"]
@@ -262,7 +342,7 @@ def risk_overview(analysis):
 
 def manual_guide(analysis):
     render_page_header(
-        "03 · DIRECIONAR TESTE", "Roteiro de teste manual",
+        "Roteiro de teste manual",
         "Transforme evidências técnicas em cenários claros para quem vai testar.",
     )
     render_release_context(analysis)
@@ -275,6 +355,7 @@ def manual_guide(analysis):
         )
         with st.container(border=True):
             st.subheader(f"{card['module']} — risco {card['risk']}")
+            st.caption(f"Score do módulo: {format_score(card['score'])}")
             st.write("**O que mudou**")
             st.write(card["o_que_mudou"])
             st.write("**Por que testar isso**")
@@ -291,7 +372,7 @@ def manual_guide(analysis):
 
 def automated_suite(analysis):
     render_page_header(
-        "04 · PRIORIZAR AUTOMAÇÃO", "Suíte automatizada priorizada",
+        "Suíte automatizada priorizada",
         "Consulte os testes importados na ordem que mais reduz o risco da release.",
     )
     render_release_context(analysis)
@@ -333,16 +414,17 @@ def automated_suite(analysis):
         )
     st.table([
         {"Teste": t["name"], "Módulo": t["module"], "Status": t["status"],
-         "Tempo (s)": t["time"], "Flakiness do módulo (%)": t["flakiness"],
-         "Score do módulo": (t["module_score"]
-                             if t["module"] in changed_modules else None)}
+         "Tempo (s)": t["time"],
+         "Flakiness do módulo": format_percent(t["flakiness"]),
+         "Score do módulo": (format_score(t["module_score"])
+                             if t["module"] in changed_modules else "—")}
         for t in ordered
     ])
 
 
 def module_detail(analysis):
     render_page_header(
-        "05 · EXPLICAR RISCO", "Detalhe do módulo",
+        "Detalhe do módulo",
         "Veja as evidências que sustentam o risco de cada área alterada.",
     )
     render_release_context(analysis)
@@ -364,27 +446,34 @@ def module_detail(analysis):
     ])
     st.subheader("Histórico de bugs")
     if detail["bugs"]:
-        st.table(detail["bugs"])
+        st.table([{
+            "Commit": item["hash"], "Mensagem": item["message"],
+            "Data": format_date_br(item["date"]),
+        } for item in detail["bugs"]])
     else:
         st.caption("Nenhum bug histórico registrado para esse módulo.")
     st.subheader("Incidentes em produção")
     if detail["incidents"]:
-        st.table(detail["incidents"])
+        st.table([{
+            "Descrição": item["description"],
+            "Data": format_date_br(item["date"]),
+        } for item in detail["incidents"]])
     else:
         st.caption("Nenhum detalhe de incidente informado para esse módulo.")
     st.subheader("Saúde dos testes")
     if selected in analysis["test_health"]:
         st.write(
-            f"Taxa de aprovação na última rodada: {detail['test_health']:.0f}%"
+            "Taxa de aprovação na última rodada: "
+            f"{format_percent(detail['test_health'])}"
         )
     else:
         st.info("Sem testes correspondentes no relatório atual.")
-    st.write(f"Flakiness histórica: {detail['flakiness']:.0f}%")
+    st.write(f"Flakiness histórica: {format_percent(detail['flakiness'])}")
 
 
 def publication_decision(analysis):
     render_page_header(
-        "06 · DECIDIR", "Decisão de publicação",
+        "Decisão de publicação",
         "Registre uma decisão humana consciente; o Garantiu não executa o deploy.",
     )
     render_release_context(analysis)
@@ -392,7 +481,7 @@ def publication_decision(analysis):
     with st.container(border=True):
         score_col, decision_col = st.columns([.8, 1.6])
         with score_col:
-            st.metric("Score atual", f"{release['score']:.0f}/100")
+            st.metric("Score atual", format_score(release["score"]))
             level, label = risk_level(release["score"])
             st.markdown(
                 f"<strong class='risk-pill risk-{level}'>{label}</strong>",
@@ -408,11 +497,11 @@ def publication_decision(analysis):
             col1, col2 = st.columns(2)
             publish = col1.button(
                 "Publicar mesmo assim", disabled=not decided_by,
-                type="primary", use_container_width=True,
+                type="primary", use_container_width=True, key="publish_release",
             )
             cancel = col2.button(
                 "Cancelar publicação", disabled=not decided_by,
-                use_container_width=True,
+                use_container_width=True, key="cancel_release",
             )
     if publish or cancel:
         decision = "publicar" if publish else "cancelar"
@@ -426,46 +515,158 @@ def publication_decision(analysis):
     )
     history = get_decision_history(DECISIONS_DB, decision_key)
     if history:
-        st.table(history)
+        st.table([{
+            "Release": item["release"],
+            "Score": format_score(item["score"]),
+            "Responsável": item["decided_by"],
+            "Decisão": item["decision"],
+            "Decidido em": format_datetime_br(item["decided_at"]),
+        } for item in history])
     else:
         st.info("Nenhuma decisão registrada para este release.")
 
 
 def release_trends():
     render_page_header(
-        "07 · APRENDER", "Histórico & tendências",
+        "Histórico & tendências",
         "Compare risco previsto e resultado real para construir confiança no score.",
     )
     repo_path = _repository_input(
         "Repositório do histórico (pasta ou link do GitHub)",
         "_history_repository_input",
     )
+    if not repo_path.strip():
+        st.info("Informe um repositório para consultar o histórico e as evidências.")
+        return
     repo_key = repository_key(repo_path)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     history = get_release_history(RELEASE_HISTORY_DB, repo_key=repo_key)
-    if not history:
-        st.info("Ainda não há releases analisados para este repositório.")
-        return
-    st.table(history)
-    st.subheader("Evolução do score previsto")
-    st.line_chart([
-        {"Analisado em (UTC)": h["computed_at"], "Score": h["score"]}
-        for h in reversed(history)
-    ], x="Analisado em (UTC)", y="Score")
-    st.caption(
-        "Compare os scores com os resultados reais na tabela. "
-        "O score é um indicador relativo, não uma probabilidade de falha."
+    all_release_rows = get_release_export_rows(
+        RELEASE_HISTORY_DB, repo_key=repo_key,
     )
-    st.subheader("Marcar resultado real de um release")
-    release_to_mark = st.selectbox("Release", [h["release"] for h in history])
-    outcome = st.radio(
-        "Resultado", ["ok", "falhou"], horizontal=True, key="outcome",
+    all_bug_rows = get_release_bug_evidence(
+        RELEASE_HISTORY_DB, repo_key=repo_key,
     )
-    if st.button("Registrar resultado"):
-        record_release_outcome(
-            RELEASE_HISTORY_DB, release_to_mark, outcome, repo_key=repo_key,
+    all_incident_rows = get_release_incident_evidence(
+        RELEASE_HISTORY_DB, repo_key=repo_key,
+    )
+    releases = [item["release"] for item in history]
+    modules = sorted({
+        row["module"] for row in
+        (all_release_rows + all_bug_rows + all_incident_rows)
+        if row.get("module")
+    })
+    filter_col, module_col = st.columns(2)
+    selected_release = filter_col.selectbox(
+        "Filtrar por release", ["Todas", *releases], key="history_release_filter",
+    )
+    selected_module = module_col.selectbox(
+        "Filtrar por módulo", ["Todos", *modules], key="history_module_filter",
+    )
+    release_filter = None if selected_release == "Todas" else selected_release
+    module_filter = None if selected_module == "Todos" else selected_module
+
+    release_rows = get_release_export_rows(
+        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        module=module_filter,
+    )
+    bug_rows = get_release_bug_evidence(
+        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        module=module_filter,
+    )
+    incident_rows = get_release_incident_evidence(
+        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        module=module_filter,
+    )
+    allowed_releases = {row["release"] for row in release_rows}
+    filtered_history = [
+        item for item in history
+        if (release_filter is None or item["release"] == release_filter)
+        and (module_filter is None or item["release"] in allowed_releases)
+    ]
+
+    render_section_label(
+        "Releases", "Último snapshot de cada release para o repositório selecionado.",
+    )
+    if filtered_history:
+        st.table([{
+            "Release": item["release"],
+            "Score": format_score(item["score"]),
+            "Analisado em": format_datetime_br(item["computed_at"]),
+            "Resultado": item["outcome"] or "Não informado",
+        } for item in filtered_history])
+        st.subheader("Evolução do score previsto")
+        st.line_chart([
+            {"Analisado em": item["computed_at"], "Score": item["score"]}
+            for item in reversed(filtered_history)
+        ], x="Analisado em", y="Score")
+        st.caption(
+            "O score é um indicador relativo, não uma probabilidade de falha."
         )
-        st.rerun()
+    else:
+        st.info("Nenhuma release encontrada para os filtros selecionados.")
+    st.download_button(
+        "Baixar CSV de releases",
+        data=rows_to_csv(release_rows, RELEASE_EXPORT_FIELDS),
+        file_name="historico-releases.csv", mime="text/csv; charset=utf-8",
+        key="download_release_history",
+    )
+
+    render_section_label(
+        "Bugs encontrados", "Correções anteriores relacionadas aos arquivos analisados.",
+    )
+    if bug_rows:
+        st.table([{
+            "Release": row["release"], "Módulo": row["module"],
+            "Arquivo": row["file_path"], "Commit": row["commit_hash"][:8],
+            "Mensagem": row["message"], "Ocorrido em": format_date_br(row["occurred_on"]),
+            "Analisado em": format_datetime_br(row["computed_at"]),
+        } for row in bug_rows])
+    else:
+        st.info("Nenhuma evidência de bug encontrada para os filtros selecionados.")
+    st.download_button(
+        "Baixar CSV de bugs", data=rows_to_csv(bug_rows, BUG_EXPORT_FIELDS),
+        file_name="historico-bugs.csv", mime="text/csv; charset=utf-8",
+        key="download_bug_history",
+    )
+
+    render_section_label(
+        "Incidentes importados", "Contagens e detalhes preservados em registros distintos.",
+    )
+    if incident_rows:
+        st.table([{
+            "Release": row["release"],
+            "Tipo": "Contagem" if row["record_type"] == "count" else "Detalhe",
+            "Módulo": row["module"],
+            "Quantidade": (row["incident_count"]
+                           if row["incident_count"] is not None else "—"),
+            "Descrição": row["description"] or "—",
+            "Ocorrido em": (format_date_br(row["occurred_on"])
+                            if row["occurred_on"] else "—"),
+            "Analisado em": format_datetime_br(row["computed_at"]),
+        } for row in incident_rows])
+    else:
+        st.info("Nenhum incidente importado para os filtros selecionados.")
+    st.download_button(
+        "Baixar CSV de incidentes",
+        data=rows_to_csv(incident_rows, INCIDENT_EXPORT_FIELDS),
+        file_name="historico-incidentes.csv", mime="text/csv; charset=utf-8",
+        key="download_incident_history",
+    )
+
+    if history:
+        st.subheader("Marcar resultado real de uma release")
+        release_to_mark = st.selectbox(
+            "Release", releases, key="release_outcome_target",
+        )
+        outcome = st.radio(
+            "Resultado", ["ok", "falhou"], horizontal=True, key="outcome",
+        )
+        if st.button("Registrar resultado", key="record_release_outcome"):
+            record_release_outcome(
+                RELEASE_HISTORY_DB, release_to_mark, outcome, repo_key=repo_key,
+            )
+            st.rerun()
 
 
 st.set_page_config(
@@ -477,7 +678,7 @@ if "analysis" not in st.session_state:
 if "screen" not in st.session_state:
     st.session_state.screen = SCREENS[0]
 render_brand()
-screen = st.sidebar.radio("Fluxo da release", SCREENS, key="screen")
+screen = st.sidebar.radio("Etapas da release", SCREENS, key="screen")
 render_sidebar_footer()
 try:
     if screen == SCREENS[0]:
@@ -486,7 +687,7 @@ try:
         release_trends()
     elif not st.session_state.analysis:
         render_page_header(
-            "FLUXO DA RELEASE", screen,
+            screen,
             "Conecte e analise uma release para liberar esta etapa.",
         )
         st.info("Analise um release na tela 'Conectar Release' primeiro.")

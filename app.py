@@ -38,16 +38,76 @@ from garantiu.ui import (
 )
 
 ROOT = Path(__file__).resolve().parent
-DATA_DIR = Path(os.environ.get("GARANTIU_DATA_DIR", ROOT))
-DECISIONS_DB = str(DATA_DIR / "garantiu.db")
-TEST_HISTORY_DB = str(DATA_DIR / "garantiu_test_history.db")
-RELEASE_HISTORY_DB = str(DATA_DIR / "garantiu_release_history.db")
+DEFAULT_DATA_DIR = Path(os.environ.get("GARANTIU_DATA_DIR", ROOT)).expanduser()
 SCREENS = [
     "Conectar Release", "Visão Geral do Risco", "Roteiro de Teste Manual",
     "Suíte Automatizada Priorizada", "Detalhe do Módulo",
     "Decisão de Publicação", "Histórico & Tendências",
 ]
 REPOSITORY_SOURCE_KEY = "repository_source"
+DATA_DIRECTORY_KEY = "data_directory"
+DATA_DIRECTORY_INPUT_KEY = "data_directory_input"
+
+
+def _parse_data_directory(value: object) -> Path:
+    """Return a valid local folder selected for persisted Garantiu data."""
+    if not isinstance(value, str) or not value.strip():
+        raise ValueError("Informe uma pasta para armazenar os dados locais.")
+    directory = Path(value.strip()).expanduser().resolve()
+    if directory.exists() and not directory.is_dir():
+        raise ValueError("O local de armazenamento precisa ser uma pasta.")
+    return directory
+
+
+def _active_data_directory() -> Path:
+    if DATA_DIRECTORY_KEY not in st.session_state:
+        st.session_state[DATA_DIRECTORY_KEY] = str(DEFAULT_DATA_DIR)
+    return _parse_data_directory(st.session_state[DATA_DIRECTORY_KEY])
+
+
+def _database_paths() -> tuple[Path, str, str, str]:
+    directory = _active_data_directory()
+    return (
+        directory,
+        str(directory / "garantiu.db"),
+        str(directory / "garantiu_test_history.db"),
+        str(directory / "garantiu_release_history.db"),
+    )
+
+
+def _apply_data_directory() -> None:
+    """Persist the chosen folder for the current app session after validation."""
+    try:
+        directory = _parse_data_directory(st.session_state[DATA_DIRECTORY_INPUT_KEY])
+        directory.mkdir(parents=True, exist_ok=True)
+    except (OSError, ValueError) as exc:
+        st.sidebar.error(f"Não foi possível usar essa pasta: {exc}")
+        return
+    st.session_state[DATA_DIRECTORY_KEY] = str(directory)
+    st.session_state.analysis = None
+
+
+def render_storage_location() -> None:
+    """Let the user select where local databases will be written."""
+    active_directory = _active_data_directory()
+    if DATA_DIRECTORY_INPUT_KEY not in st.session_state:
+        st.session_state[DATA_DIRECTORY_INPUT_KEY] = str(active_directory)
+    with st.sidebar.expander("Armazenamento local"):
+        st.text_input(
+            "Pasta para salvar os dados", key=DATA_DIRECTORY_INPUT_KEY,
+            help="Cole o caminho de uma pasta existente ou nova. O Garantiu criará "
+                 "nela os três bancos locais.",
+        )
+        st.button(
+            "Usar esta pasta", key="apply_data_directory",
+            on_click=_apply_data_directory, use_container_width=True,
+        )
+        st.caption("Pasta em uso nesta sessão:")
+        st.code(str(active_directory), language=None)
+        st.caption(
+            "Quando houver dados, os arquivos serão salvos aqui: garantiu.db, "
+            "garantiu_test_history.db e garantiu_release_history.db."
+        )
 
 
 def _repository_input(label: str, widget_key: str, **kwargs) -> str:
@@ -219,11 +279,12 @@ def connect_release():
             load_incident_details(incident_details_path.strip())
             if incident_details_path.strip() else {}
         )
-        DATA_DIR.mkdir(parents=True, exist_ok=True)
+        data_dir, _, test_history_db, release_history_db = _database_paths()
+        data_dir.mkdir(parents=True, exist_ok=True)
         if test_results:
-            record_test_run(TEST_HISTORY_DB, test_results, repo_key=repo_key)
+            record_test_run(test_history_db, test_results, repo_key=repo_key)
         flakiness = (
-            flakiness_by_module(TEST_HISTORY_DB, repo_key=repo_key)
+            flakiness_by_module(test_history_db, repo_key=repo_key)
             if test_results else {}
         )
         module_scores = score_modules(
@@ -232,7 +293,7 @@ def connect_release():
         release = score_release(module_scores)
         release_name = f"{head_ref.strip()} @ {base_label}..{head_sha[:8]}"
         analysis_id = record_release_analysis(
-            RELEASE_HISTORY_DB, release_name, release["score"], module_scores,
+            release_history_db, release_name, release["score"], module_scores,
             bug_evidence, incidents, incident_details,
             repo_key=repo_key,
         )
@@ -503,17 +564,18 @@ def publication_decision(analysis):
                 "Cancelar publicação", disabled=not decided_by,
                 use_container_width=True, key="cancel_release",
             )
+    _, decisions_db, _, _ = _database_paths()
     if publish or cancel:
         decision = "publicar" if publish else "cancelar"
         record_decision(
-            DECISIONS_DB, decision_key, release["score"], decided_by, decision,
+            decisions_db, decision_key, release["score"], decided_by, decision,
         )
         st.success(f"Decisão registrada: {decision}.")
     render_section_label(
         "Registro de auditoria",
         "Decisões anteriores desta mesma release, em ordem cronológica.",
     )
-    history = get_decision_history(DECISIONS_DB, decision_key)
+    history = get_decision_history(decisions_db, decision_key)
     if history:
         st.table([{
             "Release": item["release"],
@@ -539,16 +601,17 @@ def release_trends():
         st.info("Informe um repositório para consultar o histórico e as evidências.")
         return
     repo_key = repository_key(repo_path)
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    history = get_release_history(RELEASE_HISTORY_DB, repo_key=repo_key)
+    data_dir, _, _, release_history_db = _database_paths()
+    data_dir.mkdir(parents=True, exist_ok=True)
+    history = get_release_history(release_history_db, repo_key=repo_key)
     all_release_rows = get_release_export_rows(
-        RELEASE_HISTORY_DB, repo_key=repo_key,
+        release_history_db, repo_key=repo_key,
     )
     all_bug_rows = get_release_bug_evidence(
-        RELEASE_HISTORY_DB, repo_key=repo_key,
+        release_history_db, repo_key=repo_key,
     )
     all_incident_rows = get_release_incident_evidence(
-        RELEASE_HISTORY_DB, repo_key=repo_key,
+        release_history_db, repo_key=repo_key,
     )
     releases = [item["release"] for item in history]
     modules = sorted({
@@ -567,15 +630,15 @@ def release_trends():
     module_filter = None if selected_module == "Todos" else selected_module
 
     release_rows = get_release_export_rows(
-        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        release_history_db, repo_key=repo_key, release=release_filter,
         module=module_filter,
     )
     bug_rows = get_release_bug_evidence(
-        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        release_history_db, repo_key=repo_key, release=release_filter,
         module=module_filter,
     )
     incident_rows = get_release_incident_evidence(
-        RELEASE_HISTORY_DB, repo_key=repo_key, release=release_filter,
+        release_history_db, repo_key=repo_key, release=release_filter,
         module=module_filter,
     )
     allowed_releases = {row["release"] for row in release_rows}
@@ -664,7 +727,7 @@ def release_trends():
         )
         if st.button("Registrar resultado", key="record_release_outcome"):
             record_release_outcome(
-                RELEASE_HISTORY_DB, release_to_mark, outcome, repo_key=repo_key,
+                release_history_db, release_to_mark, outcome, repo_key=repo_key,
             )
             st.rerun()
 
@@ -706,3 +769,5 @@ except sqlite3.Error:
         "Não foi possível acessar ou gravar o histórico local. "
         "Confira a permissão da pasta de dados e tente novamente."
     )
+
+render_storage_location()

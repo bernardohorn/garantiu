@@ -258,9 +258,13 @@ módulos Git. O score é relativo, não uma probabilidade calibrada de falha.
 Três bancos SQLite são criados automaticamente na raiz da aplicação:
 `garantiu.db` (decisões), `garantiu_test_history.db` (testes) e
 `garantiu_release_history.db` (snapshots de scores, fatores por módulo,
-evidências de bugs, incidentes e resultados). Para usar outra pasta, defina
-`GARANTIU_DATA_DIR` antes de iniciar. Faça backup dos três arquivos com a
-aplicação encerrada; para restaurar, coloque-os de volta na mesma pasta.
+evidências de bugs, incidentes e resultados). Para escolher outro local na
+interface, abra **Armazenamento local** na barra lateral, informe a pasta e
+clique em **Usar esta pasta**. O Garantiu passa a utilizar esse local na sessão
+atual e cria cada banco quando houver dados daquele tipo. Também é possível definir
+`GARANTIU_DATA_DIR` antes de iniciar para estabelecer o local padrão. Faça
+backup dos três arquivos com a aplicação encerrada; para restaurar, coloque-os
+de volta na mesma pasta.
 
 Os históricos locais são separados pelo caminho canônico do repositório.
 Para GitHub, a identidade é a URL normalizada (sem `.git` e sem distinção de

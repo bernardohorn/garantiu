@@ -302,6 +302,42 @@ def test_quality_inputs_explain_sources_and_offer_real_csv_templates():
     assert all(not field.value for field in at.text_input[3:6])
 
 
+def test_user_can_choose_the_local_storage_folder(tmp_path):
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    chosen_directory = tmp_path / "dados-da-release"
+    repository_path = tmp_path / "projeto"
+    repository_path.mkdir()
+    repository = init_repo(repository_path)
+    source = repository_path / "checkout" / "gateway.py"
+    source.parent.mkdir()
+    source.write_text("primeira versão\n", encoding="utf-8")
+    repository.index.add(["checkout/gateway.py"])
+    repository.index.commit("initial")
+    source.write_text("segunda versão\n", encoding="utf-8")
+    repository.index.add(["checkout/gateway.py"])
+    repository.index.commit("fix: gateway")
+    repository.close()
+
+    at.text_input(key="data_directory_input").set_value(
+        str(chosen_directory),
+    )
+    at.button(key="apply_data_directory").click().run()
+
+    assert not at.exception
+    assert not at.error
+    assert chosen_directory.is_dir()
+    assert at.session_state.data_directory == str(chosen_directory.resolve())
+    assert str(chosen_directory.resolve()) in at.sidebar.code[0].value
+
+    at.text_input(key="_connect_repository_input").set_value(
+        str(repository_path),
+    ).run()
+    at.button(key="analyze_release").click().run()
+
+    assert not at.exception
+    assert (chosen_directory / "garantiu_release_history.db").is_file()
+
+
 def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
     repo_path = tmp_path / "docs-only"
     repo_path.mkdir()

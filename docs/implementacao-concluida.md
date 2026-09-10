@@ -64,10 +64,12 @@ O roteiro `plano-ajustes-interface-persistencia.md` também foi implementado:
   como CSV UTF-8 de releases, bugs ou incidentes;
 - a apresentação usa datas brasileiras, horário de São Paulo e scores com uma
   casa decimal, sem alterar timestamps ISO ou valores numéricos persistidos.
+- a barra lateral permite escolher a pasta de armazenamento local; os três
+  bancos SQLite passam a ser criados e consultados nesse local na sessão atual.
 
 ## Validação desta entrega
 
-- `python -m pytest -q`: **133 testes passaram** (Python 3.12.10), incluindo
+- `python -m pytest -q`: **134 testes passaram** (Python 3.12.10), incluindo
   migrações aditivas, rollback atômico, filtros, exportações e apresentação.
 - `python -m pytest -q --cov=garantiu --cov-report=term-missing`: **96% de
   cobertura de linha** no pacote `garantiu`.

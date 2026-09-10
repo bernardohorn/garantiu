@@ -79,6 +79,17 @@ def test_full_pipeline_runs_end_to_end_and_populates_risk_overview():
     assert at.metric[0].value.endswith("/100")
 
 
+def test_risk_overview_primary_action_opens_manual_guide(analyzed_app):
+    at = analyzed_app
+    at.sidebar.radio[0].set_value("Visão Geral do Risco").run()
+    assert at.button[0].label == "Preparar teste manual"
+
+    at.button[0].click().run()
+
+    assert at.sidebar.radio[0].value == "Roteiro de Teste Manual"
+    assert at.title[0].value == "Roteiro de teste manual"
+
+
 def test_all_seven_screens_without_analysis():
     at = AppTest.from_file("../app.py").run()
     screens = list(at.sidebar.radio[0].options)

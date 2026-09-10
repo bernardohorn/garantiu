@@ -22,6 +22,12 @@ from garantiu.repository_source import prepare_repository, repository_key
 from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
+from garantiu.ui import (
+    inject_design_system, render_brand, render_factor_heading,
+    render_module_focus, render_page_header, render_release_context,
+    render_risk_distribution, render_section_label, render_sidebar_footer,
+    risk_level,
+)
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("GARANTIU_DATA_DIR", ROOT))
@@ -36,7 +42,14 @@ SCREENS = [
 
 
 def connect_release():
-    st.title("Conectar release")
+    render_page_header(
+        "01 · PREPARAR RELEASE", "Conectar release",
+        "Escolha o código e o intervalo que serão avaliados antes de calcular o risco.",
+    )
+    render_section_label(
+        "Origem da análise",
+        "O Garantiu lê o histórico e as mudanças sem executar o código do repositório.",
+    )
     repo_input = st.text_input(
         "Pasta local ou link do GitHub", value=".", key="repo_path",
         help="Ex.: C:\\Projetos\\meu-sistema ou https://github.com/usuario/projeto",
@@ -44,32 +57,30 @@ def connect_release():
     )
     base_ref = st.text_input("Comparar desde", value="HEAD~1")
     head_ref = st.text_input("Branch do release", value="HEAD")
-    junit_path = st.text_input(
-        "Relatório de testes (JUnit XML)",
-        value="", key=f"junit_path:{repo_input}",
-        help="Informe um arquivo local ou repo:reports/junit.xml para ler "
-             "um XML do commit selecionado. Deixe vazio se não houver relatório.",
-    )
-    incidents_path = st.text_input(
-        "Arquivo de incidentes (CSV)",
-        value="", key=f"incidents_path:{repo_input}",
-    )
-    incident_details_path = st.text_input(
-        "Arquivo de detalhe de incidentes (CSV, opcional)",
-        value="", key=f"incident_details_path:{repo_input}",
-    )
+    with st.expander("Dados adicionais de qualidade (opcional)"):
+        st.caption(
+            "Enriqueça a análise com resultados reais de testes e incidentes. "
+            "Sem essas fontes, o score usa somente as evidências disponíveis."
+        )
+        junit_path = st.text_input(
+            "Relatório de testes (JUnit XML)",
+            value="", key=f"junit_path:{repo_input}",
+            help="Informe um arquivo local ou repo:reports/junit.xml para ler "
+                 "um XML do commit selecionado. Deixe vazio se não houver relatório.",
+        )
+        incidents_path = st.text_input(
+            "Arquivo de incidentes (CSV)",
+            value="", key=f"incidents_path:{repo_input}",
+        )
+        incident_details_path = st.text_input(
+            "Arquivo de detalhe de incidentes (CSV, opcional)",
+            value="", key=f"incident_details_path:{repo_input}",
+        )
     st.caption(
-        "Links do GitHub são baixados a cada análise. Use a URL da raiz do "
-        "repositório e informe a branch nos campos acima. "
-        "O link GitHub fornece código e histórico Git, não resultados de testes. "
-        "Informe o JUnit produzido pelos testes desse projeto: arquivo local "
-        "ou repo:caminho/do/relatorio.xml no commit analisado. "
-        "CSV é opcional e continua local. Sem essas fontes, a análise usa "
-        "somente os dados disponíveis, sem resultados de exemplo. "
-        "Cada análise registra uma rodada de testes; use relatórios de "
-        "execuções distintas para acompanhar a flakiness."
+        "Links GitHub são lidos novamente em cada análise. JUnit pode ser local "
+        "ou usar repo:caminho/arquivo.xml; os arquivos CSV permanecem locais."
     )
-    if not st.button("Analisar mudanças"):
+    if not st.button("Analisar mudanças", type="primary", use_container_width=True):
         return
     st.session_state.analysis = None
     with st.spinner("Lendo mudanças, testes e histórico..."):
@@ -132,13 +143,30 @@ def connect_release():
 
 
 def risk_overview(analysis):
-    st.title("Visão geral do risco")
+    render_page_header(
+        "02 · AVALIAR RELEASE", "Visão geral do risco",
+        "Entenda o impacto, encontre o foco do teste e avance com evidências.",
+    )
+    render_release_context(analysis)
     release = analysis["release"]
-    st.metric("Score do release", f"{release['score']:.0f}/100")
     if not analysis["module_scores"]:
+        st.metric("Score de risco da release", f"{release['score']:.0f}/100")
         st.info("Nenhum módulo alterado neste intervalo.")
         return
-    st.caption(f"Puxado pelo módulo: {release['top_module']}")
+    with st.container(border=True):
+        score_col, distribution_col = st.columns([1.15, 1])
+        with score_col:
+            st.metric("Score de risco da release", f"{release['score']:.0f}/100")
+            level, label = risk_level(release["score"])
+            st.markdown(
+                f"<strong class='risk-pill risk-{level}'>{label}</strong>",
+                unsafe_allow_html=True,
+            )
+            st.caption(
+                f"O módulo {release['top_module']} concentra o maior risco desta release."
+            )
+        with distribution_col:
+            render_risk_distribution(analysis["module_scores"])
     risco = release["modulos_em_risco"]
     outros = risco["alto"] + risco["medio"] - 1
     if outros > 0:
@@ -147,14 +175,32 @@ def risk_overview(analysis):
             f"{outros} módulo(s) em risco alto/médio nesta mudança "
             f"({risco['alto']} em risco alto, {risco['medio']} em risco médio)."
         )
-    st.subheader("Composição do score (módulo de maior risco)")
-    for factor, value in release["factors"].items():
-        st.progress(min(value, 100) / 100, text=f"{factor}: {value:.0f}")
-    st.subheader("Módulos mais arriscados")
-    st.table([
-        {"Módulo": m["module"], "Score": m["score"]}
-        for m in analysis["module_scores"]
-    ])
+    render_section_label(
+        f"Por que {release['top_module']} está em risco?",
+        "Quatro sinais objetivos compõem o score do módulo mais crítico.",
+    )
+    factor_columns = st.columns(2)
+    for index, (factor, value) in enumerate(release["factors"].items()):
+        with factor_columns[index % 2]:
+            render_factor_heading(factor, value)
+            st.progress(min(value, 100) / 100)
+    render_section_label(
+        "Módulos por nível de risco",
+        "Ordenados por risco e impacto para indicar onde testar primeiro.",
+    )
+    table_col, focus_col = st.columns([1.7, 1])
+    with table_col:
+        st.table([
+            {"Módulo": m["module"], "Score": m["score"],
+             "Nível": risk_level(m["score"])[1]}
+            for m in analysis["module_scores"]
+        ])
+    with focus_col:
+        render_module_focus(analysis["module_scores"][0])
+        st.button(
+            "Preparar teste manual", type="primary", use_container_width=True,
+            on_click=lambda: st.session_state.update(screen=SCREENS[2]),
+        )
     if any(m["module"] not in analysis["test_health"]
            for m in analysis["module_scores"]):
         st.info(
@@ -164,7 +210,11 @@ def risk_overview(analysis):
 
 
 def manual_guide(analysis):
-    st.title("Roteiro de teste manual")
+    render_page_header(
+        "03 · DIRECIONAR TESTE", "Roteiro de teste manual",
+        "Transforme evidências técnicas em cenários claros para quem vai testar.",
+    )
+    render_release_context(analysis)
     if not analysis["module_scores"]:
         st.info("Nenhum módulo alterado para gerar um roteiro.")
     for module in analysis["module_scores"]:
@@ -189,7 +239,11 @@ def manual_guide(analysis):
 
 
 def automated_suite(analysis):
-    st.title("Suíte automatizada priorizada")
+    render_page_header(
+        "04 · PRIORIZAR AUTOMAÇÃO", "Suíte automatizada priorizada",
+        "Consulte os testes importados na ordem que mais reduz o risco da release.",
+    )
+    render_release_context(analysis)
     st.caption(f"Repositório analisado: {analysis['repo_path']}")
     st.caption(f"Release: {analysis['release_name']}")
     if not analysis.get("junit_source"):
@@ -236,7 +290,11 @@ def automated_suite(analysis):
 
 
 def module_detail(analysis):
-    st.title("Detalhe do módulo")
+    render_page_header(
+        "05 · EXPLICAR RISCO", "Detalhe do módulo",
+        "Veja as evidências que sustentam o risco de cada área alterada.",
+    )
+    render_release_context(analysis)
     modules = [m["module"] for m in analysis["module_scores"]]
     if not modules:
         st.info("Nenhum módulo alterado para detalhar.")
@@ -274,22 +332,47 @@ def module_detail(analysis):
 
 
 def publication_decision(analysis):
-    st.title("Decisão de publicação")
+    render_page_header(
+        "06 · DECIDIR", "Decisão de publicação",
+        "Registre uma decisão humana consciente; o Garantiu não executa o deploy.",
+    )
+    render_release_context(analysis)
     release = analysis["release"]
-    st.metric("Score atual", f"{release['score']:.0f}/100")
-    st.caption("Esta tela registra a decisão humana; não executa um deploy.")
-    decided_by = st.text_input("Seu nome").strip()
-    decision_key = f"{analysis['repo_path']} :: {analysis['release_name']}"
-    col1, col2 = st.columns(2)
-    publish = col1.button("Publicar mesmo assim", disabled=not decided_by)
-    cancel = col2.button("Cancelar publicação", disabled=not decided_by)
+    with st.container(border=True):
+        score_col, decision_col = st.columns([.8, 1.6])
+        with score_col:
+            st.metric("Score atual", f"{release['score']:.0f}/100")
+            level, label = risk_level(release["score"])
+            st.markdown(
+                f"<strong class='risk-pill risk-{level}'>{label}</strong>",
+                unsafe_allow_html=True,
+            )
+        with decision_col:
+            st.subheader("Responsável pela decisão")
+            st.caption(
+                "Seu nome identifica o registro de auditoria. Isto não substitui autenticação."
+            )
+            decided_by = st.text_input("Seu nome").strip()
+            decision_key = f"{analysis['repo_path']} :: {analysis['release_name']}"
+            col1, col2 = st.columns(2)
+            publish = col1.button(
+                "Publicar mesmo assim", disabled=not decided_by,
+                type="primary", use_container_width=True,
+            )
+            cancel = col2.button(
+                "Cancelar publicação", disabled=not decided_by,
+                use_container_width=True,
+            )
     if publish or cancel:
         decision = "publicar" if publish else "cancelar"
         record_decision(
             DECISIONS_DB, decision_key, release["score"], decided_by, decision,
         )
         st.success(f"Decisão registrada: {decision}.")
-    st.subheader("Registro (auditoria)")
+    render_section_label(
+        "Registro de auditoria",
+        "Decisões anteriores desta mesma release, em ordem cronológica.",
+    )
     history = get_decision_history(DECISIONS_DB, decision_key)
     if history:
         st.table(history)
@@ -298,7 +381,10 @@ def publication_decision(analysis):
 
 
 def release_trends():
-    st.title("Histórico & tendências")
+    render_page_header(
+        "07 · APRENDER", "Histórico & tendências",
+        "Compare risco previsto e resultado real para construir confiança no score.",
+    )
     repo_path = st.text_input(
         "Repositório do histórico (pasta ou link do GitHub)",
         value=st.session_state.get("history_repo", str(ROOT)),
@@ -331,21 +417,25 @@ def release_trends():
         st.rerun()
 
 
-st.set_page_config(page_title="garantiu", page_icon="🛡️", layout="wide")
-st.markdown(
-    "<style>div.block-container{padding-top:2rem;}</style>",
-    unsafe_allow_html=True,
-)
+st.set_page_config(page_title="garantiu", page_icon="G", layout="wide")
+inject_design_system()
 if "analysis" not in st.session_state:
     st.session_state.analysis = None
-screen = st.sidebar.radio("Tela", SCREENS)
+if "screen" not in st.session_state:
+    st.session_state.screen = SCREENS[0]
+render_brand()
+screen = st.sidebar.radio("Fluxo da release", SCREENS, key="screen")
+render_sidebar_footer()
 try:
     if screen == SCREENS[0]:
         connect_release()
     elif screen == SCREENS[6]:
         release_trends()
     elif not st.session_state.analysis:
-        st.title(screen)
+        render_page_header(
+            "FLUXO DA RELEASE", screen,
+            "Conecte e analise uma release para liberar esta etapa.",
+        )
         st.info("Analise um release na tela 'Conectar Release' primeiro.")
     else:
         renderers = {

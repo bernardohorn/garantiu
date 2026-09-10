@@ -281,6 +281,21 @@ def test_switching_repository_clears_report_and_stale_analysis(analyzed_app):
     assert not at.table
 
 
+def test_repository_input_survives_navigation_between_screens():
+    at = AppTest.from_file("../app.py").run()
+    repository = "https://github.com/owner/persistent-project"
+    at.text_input[0].set_value(repository).run()
+
+    at.sidebar.radio[0].set_value("Visão Geral do Risco").run()
+    assert at.session_state.repository_source == repository
+
+    at.sidebar.radio[0].set_value("Histórico & Tendências").run()
+    assert at.text_input[0].value == repository
+
+    at.sidebar.radio[0].set_value("Conectar Release").run()
+    assert at.text_input[0].value == repository
+
+
 def test_report_in_github_commit_populates_actual_suite(remote_fixture):
     upstream, _ = remote_fixture
     from git import Repo

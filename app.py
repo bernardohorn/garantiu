@@ -41,6 +41,28 @@ SCREENS = [
     "Suíte Automatizada Priorizada", "Detalhe do Módulo",
     "Decisão de Publicação", "Histórico & Tendências",
 ]
+REPOSITORY_SOURCE_KEY = "repository_source"
+
+
+def _repository_input(label: str, widget_key: str, **kwargs) -> str:
+    """Render a repository field backed by durable, non-widget session state."""
+    if REPOSITORY_SOURCE_KEY not in st.session_state:
+        st.session_state[REPOSITORY_SOURCE_KEY] = "."
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = st.session_state[REPOSITORY_SOURCE_KEY]
+    return st.text_input(
+        label, key=widget_key, on_change=_persist_repository_input,
+        args=(widget_key,), **kwargs,
+    )
+
+
+def _persist_repository_input(widget_key: str) -> None:
+    """Copy a transient widget value before Streamlit cleans hidden widgets."""
+    value = st.session_state[widget_key]
+    if value == st.session_state.get(REPOSITORY_SOURCE_KEY):
+        return
+    st.session_state[REPOSITORY_SOURCE_KEY] = value
+    st.session_state.analysis = None
 
 
 def connect_release():
@@ -52,10 +74,9 @@ def connect_release():
         "Origem da análise",
         "O Garantiu lê o histórico e as mudanças sem executar o código do repositório.",
     )
-    repo_input = st.text_input(
-        "Pasta local ou link do GitHub", value=".", key="repo_path",
+    repo_input = _repository_input(
+        "Pasta local ou link do GitHub", "_connect_repository_input",
         help="Ex.: C:\\Projetos\\meu-sistema ou https://github.com/usuario/projeto",
-        on_change=lambda: st.session_state.update(analysis=None),
     )
     base_ref = st.text_input(
         "Comparar desde", value="AUTO",
@@ -90,7 +111,7 @@ def connect_release():
         return
     st.session_state.analysis = None
     with st.spinner("Lendo mudanças, testes e histórico..."):
-        repo_path = st.session_state.repo_path.strip()
+        repo_path = repo_input.strip()
         if not repo_path or not base_ref.strip() or not head_ref.strip():
             raise ValueError("Informe o repositório e as duas referências Git.")
         with prepare_repository(repo_path) as source:
@@ -154,7 +175,6 @@ def connect_release():
             "test_health": test_health, "flakiness": flakiness,
             "bug_details": bug_details, "incident_details": incident_details,
         }
-        st.session_state.history_repo = repo_key
     st.success(
         f"{len(changed_files)} arquivo(s) de produto analisado(s) "
         f"em {len(module_scores)} módulo(s), dentro de "
@@ -416,9 +436,9 @@ def release_trends():
         "07 · APRENDER", "Histórico & tendências",
         "Compare risco previsto e resultado real para construir confiança no score.",
     )
-    repo_path = st.text_input(
+    repo_path = _repository_input(
         "Repositório do histórico (pasta ou link do GitHub)",
-        value=st.session_state.get("history_repo", str(ROOT)),
+        "_history_repository_input",
     )
     repo_key = repository_key(repo_path)
     DATA_DIR.mkdir(parents=True, exist_ok=True)

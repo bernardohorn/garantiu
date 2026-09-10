@@ -208,6 +208,16 @@ resultados sem precisar baixar novamente o repositório.
 
 ## Entradas e cálculo
 
+- **Arquivos analisados:** somente código de produto reconhecido participa do
+  score, do roteiro manual e dos detalhes de módulos. Testes, documentação,
+  metadados do repositório, configurações, manifests/lockfiles, assets,
+  relatórios, código gerado ou de terceiros e tipos desconhecidos são excluídos.
+  As regras estão centralizadas em `garantiu/git_reader.py`; diretórios e nomes
+  especiais têm precedência sobre a extensão (`tests/app.py` é teste).
+  Em Conectar release e Visão geral do risco, expanda o resumo dos arquivos
+  ignorados para consultar caminho, categoria e motivo. Essa lista fica na
+  sessão; sua exportação e persistência ainda pertencem às próximas etapas do
+  plano. Um intervalo sem código de produto não gera módulos de risco.
 - **Git:** módulo é a primeira pasta do arquivo; arquivos na raiz usam o
   próprio nome. Correções são inferidas de mensagens contendo palavras como
   `fix`, `bug` ou `corrige`, no histórico alcançável pelo commit final escolhido.

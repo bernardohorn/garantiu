@@ -2,6 +2,8 @@ import re
 
 import git
 
+from garantiu.git_reader import classify_changed_path
+
 BUG_COMMIT_PATTERN = re.compile(
     r"\b(fix|fixes|fixed|closes|resolve|resolves|bug|corrige|corrigido)\b",
     re.IGNORECASE,
@@ -37,11 +39,15 @@ def build_bug_history(repo_path: str, ref: str = "HEAD") -> dict:
 def bug_history_detail_by_module(
     repo_path: str, module: str, ref: str = "HEAD"
 ) -> list[dict]:
-    """Return fixes reachable from ref once each, newest first, with dates."""
+    """Return product-code fixes reachable from ref once each, with dates."""
     results = []
     with git.Repo(repo_path) as repo:
         for data in get_bug_fix_commits(repo_path, ref=ref):
-            if any(path.split("/")[0] == module for path in data["files"]):
+            if any(
+                path.split("/")[0] == module
+                and classify_changed_path(path)["include_in_risk"]
+                for path in data["files"]
+            ):
                 commit = repo.commit(data["hash"])
                 results.append((commit.committed_date, {
                     "hash": data["hash"],

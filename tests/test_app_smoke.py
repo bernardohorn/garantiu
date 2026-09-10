@@ -4,7 +4,9 @@ from pathlib import Path
 import pytest
 from streamlit.testing.v1 import AppTest
 
-from garantiu.release_history import get_release_history
+from garantiu.release_history import (
+    get_release_bug_evidence, get_release_export_rows, get_release_history,
+)
 from garantiu.ui import BRAND_SYMBOL_PATH, BRAND_WORDMARK_PATH
 from tests.conftest import init_repo
 from tests.test_repository_source import remote_fixture
@@ -426,10 +428,82 @@ def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):
     assert not at.exception
     assert not at.error
     assert at.session_state.analysis["changed_files"] == []
-    assert len(at.session_state.analysis["documentation_files"]) == 1
+    assert at.session_state.analysis["excluded_files"][0]["category"] == "documentation"
     assert at.session_state.analysis["release"]["score"] == 0
-    assert any("não influenciaram" in item.value for item in at.info)
-    assert any("não contém mudanças de produto" in item.value for item in at.warning)
+    assert any("ignorados no cálculo" in item.label for item in at.expander)
+    assert any("não contém mudanças de código de produto" in item.value for item in at.warning)
+
+
+@pytest.mark.parametrize("include_product", [False, True])
+def test_support_files_are_auditable_and_excluded_from_pipeline(tmp_path, include_product):
+    repo_path = tmp_path / "mixed"
+    repo_path.mkdir()
+    support = {
+        ".gitignore": "repository_meta",
+        ".github/workflows/ci.yml": "repository_meta",
+        ".streamlit/config.toml": "configuration",
+        "logo.png": "asset", "guide.pdf": "documentation",
+        "reports/junit.xml": "quality_data", "reports/data.csv": "quality_data",
+        "checkout/tests/test_pay.py": "test_code",
+        "checkout/README.md": "documentation", "unknown.xyz": "unknown",
+    }
+    with init_repo(repo_path) as repo:
+        (repo_path / "README.md").write_text("initial\n", encoding="utf-8")
+        repo.index.add(["README.md"])
+        repo.index.commit("initial")
+        for name in support:
+            path = repo_path / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("support\n", encoding="utf-8")
+        repo.index.add(list(support))
+        repo.index.commit("fix: support only")
+        if include_product:
+            for name in ["checkout/pay.py", "checkout/style.css"]:
+                (repo_path / name).write_text("product\n", encoding="utf-8")
+            repo.index.add(["checkout/pay.py", "checkout/style.css"])
+            repo.index.commit("fix: product")
+
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+    at.text_input[0].set_value(str(repo_path)).run()
+    at.button(key="analyze_release").click().run()
+    assert not at.exception
+    assert not at.error
+    analysis = at.session_state.analysis
+    assert len(analysis["all_changed_files"]) == len(support) + (2 if include_product else 0)
+    assert {f["path"]: f["category"] for f in analysis["excluded_files"]} == support
+    assert all(f["reason"] for f in analysis["excluded_files"])
+    assert analysis["changed_files"] == analysis["changed_code_files"]
+    assert {f["path"] for f in analysis["changed_code_files"]} == (
+        {"checkout/pay.py", "checkout/style.css"} if include_product else set()
+    )
+    db = str(tmp_path / "data/garantiu_release_history.db")
+    rows = get_release_export_rows(db, repo_key=analysis["repo_path"])
+    assert {r["module"] for r in rows if r["module"]} == (
+        {"checkout"} if include_product else set()
+    )
+    evidence = get_release_bug_evidence(db, repo_key=analysis["repo_path"])
+    assert {r["file_path"] for r in evidence} == (
+        {"checkout/pay.py", "checkout/style.css"} if include_product else set()
+    )
+    if include_product:
+        assert [d["message"] for d in analysis["bug_details"]["checkout"]] == ["fix: product"]
+        assert analysis["module_scores"][0]["factors"]["complexidade"] == 100
+    else:
+        assert analysis["module_scores"] == []
+        assert analysis["release"]["top_module"] is None
+    at.sidebar.radio[0].set_value("Visão Geral do Risco").run()
+    assert not at.exception
+    audit = next(e for e in at.expander if "ignorados no cálculo" in e.label)
+    assert set(audit.table[0].value["Arquivo"]) == set(support)
+    if not include_product:
+        assert not at.metric
+    at.sidebar.radio[0].set_value("Roteiro de Teste Manual").run()
+    assert not at.exception
+    text = "\n".join(m.value for m in at.markdown)
+    assert "unknown.xyz" not in text
+    assert "checkout/README.md" not in text
+    at.sidebar.radio[0].set_value("Conectar Release").run()
+    assert any("ignorados no cálculo" in e.label for e in at.expander)
 
 
 def test_switching_repository_clears_report_and_stale_analysis(analyzed_app):

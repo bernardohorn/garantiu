@@ -112,7 +112,7 @@ def resolve_comparison_base(
 
 
 def is_documentation_change(path: str) -> bool:
-    """Legacy filter retained until the analysis adopts the full classifier."""
+    """Legacy documentation-only filter; analysis uses classify_changed_path."""
     normalized = path.replace("\\", "/").lower()
     if normalized.startswith("docs/"):
         return True

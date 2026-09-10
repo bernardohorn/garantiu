@@ -1,5 +1,21 @@
 # Implementação do plano
 
+## Incremento de classificação — 10/09/2026
+
+Concluída a fase 2 de `plano-correcao-detalhe-modulos-e-score.md`: somente
+código de produto segue para score, roteiro e persistência dos módulos.
+Arquivos excluídos ficam auditáveis na sessão com categoria e motivo; o
+detalhe de bugs desconsidera correções apenas de suporte. Intervalos sem
+código mostram estado vazio na visão geral.
+
+Verificação: 215 testes aprovados, 95% de cobertura de `garantiu`, incluindo
+AppTest e leitura dos snapshots SQLite. Um aviso `WinError 6` ocorreu na
+finalização de subprocesso, sem falhas. Validação visual manual pendente.
+Este incremento não conclui o plano completo: binários, evidências de bugs,
+fontes ausentes e score v2 continuam pendentes.
+
+## Plano original do MVP
+
 Referência: `garantiu-plano-de-implementacao.pdf` (37 páginas), com fonte
 Markdown em `superpowers/plans/2026-09-09-garantiu-mvp-implementation.md`.
 O PDF define o escopo técnico de sete telas; o wireframe e o relatório de

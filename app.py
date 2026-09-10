@@ -13,7 +13,7 @@ from garantiu.bug_history import (
 )
 from garantiu.decision_log import get_decision_history, record_decision
 from garantiu.git_reader import (
-    get_changed_files, is_documentation_change, resolve_comparison_base,
+    classify_changed_path, get_changed_files, resolve_comparison_base,
 )
 from garantiu.incidents import (
     load_project_incident_details, load_project_incidents,
@@ -233,6 +233,19 @@ def _render_analysis_sources(analysis: dict) -> None:
     )
 
 
+def _render_excluded_files(analysis: dict) -> None:
+    excluded = analysis.get("excluded_files", [])
+    if excluded:
+        with st.expander(
+            f"{len(excluded)} arquivo(s) de suporte foram ignorados no cálculo."
+        ):
+            st.table([
+                {"Arquivo": item["path"], "Categoria": item["category"],
+                 "Motivo": item["reason"]}
+                for item in excluded
+            ])
+
+
 def connect_release():
     render_page_header(
         "Conectar release",
@@ -319,6 +332,7 @@ def connect_release():
     ):
         if st.session_state.analysis:
             _render_analysis_sources(st.session_state.analysis)
+            _render_excluded_files(st.session_state.analysis)
         return
     st.session_state.analysis = None
     repo_path = repo_input.strip()
@@ -352,14 +366,16 @@ def connect_release():
             all_changed_files = get_changed_files(
                 source.path, base_sha, head_sha,
             )
-            documentation_files = [
-                change for change in all_changed_files
-                if is_documentation_change(change["path"])
-            ]
-            changed_files = [
-                change for change in all_changed_files
-                if not is_documentation_change(change["path"])
-            ]
+            changed_code_files = []
+            excluded_files = []
+            for change in all_changed_files:
+                classification = classify_changed_path(change["path"])
+                if classification["include_in_risk"]:
+                    changed_code_files.append(change)
+                else:
+                    excluded_files.append({**change, **classification})
+            # Compatibility alias: every downstream consumer receives product code only.
+            changed_files = changed_code_files
             bug_history = build_bug_history(source.path, ref=head_sha)
             bug_details = {
                 module: bug_history_detail_by_module(
@@ -394,7 +410,8 @@ def connect_release():
             "release_name": release_name, "repo_path": repo_key,
             "comparison_base": base_label,
             "all_changed_files": all_changed_files,
-            "documentation_files": documentation_files,
+            "excluded_files": excluded_files,
+            "changed_code_files": changed_code_files,
             "changed_files": changed_files, "module_scores": module_scores,
             "release": release, "test_results": test_results,
             "junit_source": junit_path.strip(),
@@ -411,16 +428,12 @@ def connect_release():
         f"em {len(module_scores)} módulo(s), dentro de "
         f"{len(all_changed_files)} alteração(ões) no intervalo."
     )
-    if documentation_files:
-        st.info(
-            f"{len(documentation_files)} arquivo(s) apenas de documentação "
-            "foram identificados e não influenciaram o score de risco."
-        )
+    _render_excluded_files(st.session_state.analysis)
     if not changed_files:
         st.warning(
-            "O intervalo não contém mudanças de produto para analisar. "
-            "Escolha outra referência base se esperava alterações de código "
-            "ou configuração."
+            "O intervalo não contém mudanças de código de produto para analisar. "
+            "Houve alterações, mas nenhuma foi classificada como código de produto."
+            if all_changed_files else "Nenhum arquivo mudou no intervalo Git selecionado."
         )
     _render_analysis_sources(st.session_state.analysis)
 
@@ -432,9 +445,9 @@ def risk_overview(analysis):
     )
     render_release_context(analysis)
     release = analysis["release"]
+    _render_excluded_files(analysis)
     if not analysis["module_scores"]:
-        st.metric("Score de risco da release", format_score(release["score"]))
-        st.info("Nenhum módulo alterado neste intervalo.")
+        st.info("Nenhuma mudança de código de produto para calcular o risco neste intervalo.")
         return
     with st.container(border=True):
         score_col, distribution_col = st.columns([1.15, 1])

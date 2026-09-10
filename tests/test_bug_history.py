@@ -60,15 +60,16 @@ def test_bug_details_recent_first(repo_with_bug_fixes):
 
 def test_bug_details_root_module_and_one_entry_for_multiple_files(tmp_path):
     repo = init_repo(tmp_path)
-    for name in ["README.md", "checkout/a.py", "checkout/b.py"]:
+    for name in ["app.py", "README.md", "checkout/a.py", "checkout/b.py"]:
         path = tmp_path / name
         path.parent.mkdir(exist_ok=True)
         path.write_text("initial", encoding="utf-8")
-    repo.index.add(["README.md", "checkout/a.py", "checkout/b.py"])
+    repo.index.add(["app.py", "README.md", "checkout/a.py", "checkout/b.py"])
     commit = repo.index.commit(
         "fix: initial bug", commit_date="2026-03-05T12:00:00 +0000"
     )
-    for module in ["README.md", "checkout"]:
+    assert bug_history_detail_by_module(str(tmp_path), "README.md") == []
+    for module in ["app.py", "checkout"]:
         details = bug_history_detail_by_module(str(tmp_path), module)
         assert details == [{
             "hash": commit.hexsha, "message": "fix: initial bug",

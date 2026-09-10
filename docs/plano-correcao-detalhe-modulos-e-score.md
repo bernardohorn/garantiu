@@ -1,6 +1,6 @@
 # Plano de implementação — detalhe dos módulos, fatores de risco e filtro de código
 
-## Progresso em 10/09/2026 — primeiro incremento
+## Progresso em 10/09/2026 — segundo incremento
 
 Concluído: classificador `classify_changed_path()` em `garantiu/git_reader.py`,
 com categorias, motivos, precedência centralizada e exclusão de tipos
@@ -8,12 +8,25 @@ desconhecidos. O filtro legado `is_documentation_change()` foi preservado.
 Os testes cobrem categorias, linguagens reconhecidas, caminhos Windows e
 renomes entre código e diretórios de teste.
 
-Pendente: conectar a classificação ao pipeline e à lista auditável de
-arquivos excluídos; concluir as fases de binários, bugs, testes, incidentes,
-score v2, persistência, exportações e interface. Este incremento disponibiliza
-o classificador; a análise ainda usa o filtro anterior de documentação e
-o algoritmo de score anterior. As caixas abaixo continuam indicando o aceite
-completo de cada fase, ainda pendente.
+Implementado neste incremento: classificação conectada ao pipeline antes dos
+cálculos, roteiro e persistência; `all_changed_files`, `changed_code_files` e
+`excluded_files` preservados na sessão. `changed_files` permanece como alias
+filtrado para os consumidores existentes. Conectar release e Visão geral do
+risco mostram a lista auditável com caminho, categoria e motivo. Sem código
+de produto, a visão geral apresenta estado vazio. O detalhe de bugs ignora
+correções exclusivamente de suporte dentro do módulo.
+
+Pendente: binários e explicação das linhas (fase 1), contagem e janela de bugs,
+disponibilidade de testes e incidentes, score v2, persistência dos novos
+contratos, exportações e apresentação dos fatores. A fórmula do score ainda
+é a anterior. A auditoria de exclusões está na sessão; ainda não é exportada
+nem persistida. A validação manual final do plano permanece pendente.
+
+Verificação deste incremento: 215 testes aprovados com
+`python -m pytest -q --cov=garantiu --cov-report=term-missing`, cobertura de
+95% de `garantiu`. Houve um aviso de finalização de subprocesso no Windows
+(`WinError 6`), sem falha de teste. AppTest validou exclusões, navegação,
+estado vazio e os registros SQLite; não houve validação visual manual.
 
 ## Objetivo
 
@@ -244,12 +257,12 @@ risco. A decisão deve ser acompanhada por um aviso de baixa completude.
 
 ### Implementação
 
-- [ ] Substituir `is_documentation_change()` por uma classificação mais ampla,
+- [x] Substituir `is_documentation_change()` por uma classificação mais ampla,
   mantendo um wrapper temporário se necessário para compatibilidade.
-- [ ] Criar `classify_changed_path(path) -> {category, include_in_risk, reason}`.
-- [ ] Centralizar as regras em constantes testáveis; não espalhar listas de
+- [x] Criar `classify_changed_path(path) -> {category, include_in_risk, reason}`.
+- [x] Centralizar as regras em constantes testáveis; não espalhar listas de
   extensões pelo `app.py`.
-- [ ] Considerar como código de produto, inicialmente:
+- [x] Considerar como código de produto, inicialmente:
   - Python, JavaScript e TypeScript;
   - Java, Kotlin, Go, Rust, Ruby, PHP e C#;
   - C, C++, Swift e Dart;
@@ -257,7 +270,7 @@ risco. A decisão deve ser acompanhada por um aviso de baixa completude.
   - HTML, CSS, Sass e Less;
   - SQL;
   - scripts shell, PowerShell e batch.
-- [ ] Excluir explicitamente caminhos e nomes conhecidos:
+- [x] Excluir explicitamente caminhos e nomes conhecidos:
   - `.gitignore`, `.gitattributes`, `.editorconfig`;
   - `.github/`, `.gitlab/`, `.circleci/`;
   - `docs/`, `sample_data/`, `examples/`, `fixtures/`;
@@ -266,17 +279,17 @@ risco. A decisão deve ser acompanhada por um aviso de baixa completude.
   - imagens, fontes, áudio, vídeo, PDFs, XMLs e CSVs;
   - lockfiles e manifests de dependência;
   - diretórios e padrões de teste.
-- [ ] Aplicar a classificação antes de:
+- [x] Aplicar a classificação antes de:
   - agrupar arquivos por módulo;
   - calcular complexidade;
   - selecionar evidências de bugs;
   - gerar roteiro manual;
   - persistir detalhes do módulo.
-- [ ] Preservar `excluded_files` na sessão e mostrar um resumo recolhível:
+- [x] Preservar `excluded_files` na sessão e mostrar um resumo recolhível:
 
   > 12 arquivos de suporte foram ignorados no cálculo.
 
-- [ ] Dentro do resumo, listar caminho, categoria e motivo.
+- [x] Dentro do resumo, listar caminho, categoria e motivo.
 
 ### Regra de precedência
 
@@ -294,35 +307,35 @@ classificado como código de produto.
 
 ### Compatibilidade
 
-- [ ] Manter `all_changed_files` para contagens e mensagens informativas.
-- [ ] Renomear gradualmente `changed_files` para `changed_code_files` ou
+- [x] Manter `all_changed_files` para contagens e mensagens informativas.
+- [x] Renomear gradualmente `changed_files` para `changed_code_files` ou
   documentar explicitamente que ele já está filtrado.
-- [ ] Releases sem código de produto devem resultar em estado vazio, não em
+- [x] Releases sem código de produto devem resultar em estado vazio, não em
   score calculado a partir de arquivos de configuração.
-- [ ] Informar que houve mudanças, mas nenhuma foi classificada como código de
+- [x] Informar que houve mudanças, mas nenhuma foi classificada como código de
   produto.
 
 ### Testes
 
-- [ ] Teste parametrizado para cada categoria.
-- [ ] `.gitignore` não entra no score.
-- [ ] workflow YAML não entra no score.
-- [ ] configuração Streamlit não entra no score.
-- [ ] PNG e PDF não entram no score.
-- [ ] JUnit XML e CSV de incidentes não entram no score.
-- [ ] arquivo Python dentro de `tests/` não entra no score.
-- [ ] arquivo Python dentro de `garantiu/` entra no score.
-- [ ] CSS de produto entra no score.
-- [ ] extensão desconhecida fica em `excluded_files`.
-- [ ] rename entre categoria ignorada e código usa o caminho novo.
-- [ ] análise contendo somente arquivos ignorados gera score vazio.
+- [x] Teste parametrizado para cada categoria.
+- [x] `.gitignore` não entra no score.
+- [x] workflow YAML não entra no score.
+- [x] configuração Streamlit não entra no score.
+- [x] PNG e PDF não entram no score.
+- [x] JUnit XML e CSV de incidentes não entram no score.
+- [x] arquivo Python dentro de `tests/` não entra no score.
+- [x] arquivo Python dentro de `garantiu/` entra no score.
+- [x] CSS de produto entra no score.
+- [x] extensão desconhecida fica em `excluded_files`.
+- [x] rename entre categoria ignorada e código usa o caminho novo.
+- [x] análise contendo somente arquivos ignorados gera score vazio.
 
 ### Critérios de aceite
 
-- [ ] `.gitignore` e arquivos equivalentes não aparecem como módulos.
-- [ ] Somente código de produto influencia complexidade e score.
-- [ ] Arquivos excluídos continuam auditáveis em uma seção secundária.
-- [ ] Nenhum arquivo desconhecido entra silenciosamente no cálculo.
+- [x] `.gitignore` e arquivos equivalentes não aparecem como módulos.
+- [x] Somente código de produto influencia complexidade e score.
+- [x] Arquivos excluídos continuam auditáveis em uma seção secundária.
+- [x] Nenhum arquivo desconhecido entra silenciosamente no cálculo.
 
 ## Fase 3 — Corrigir a evidência de bugs
 
@@ -643,9 +656,9 @@ Cada módulo deve conter:
 .\.venv\Scripts\python.exe -m pytest -q --cov=garantiu --cov-report=term-missing
 ```
 
-O ambiente virtual atual deve ser restaurado ou recriado antes desses comandos,
-pois ele ainda referencia um executável Python que não está disponível nesta
-máquina.
+O ambiente virtual foi localizado e executado com Python 3.12.10. No ambiente
+restrito do agente, o acesso ao executável requer execução com permissão
+ampliada; não foi necessário recriar o ambiente.
 
 ### Cenários manuais obrigatórios
 

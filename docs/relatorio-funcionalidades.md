@@ -6,6 +6,14 @@ no ar. Baseado no wireframe de 7 telas e no problema validado (`docs/superpowers
 
 ## Resumo em um parágrafo
 
+Estado implementado do filtro de arquivos: o pipeline usa apenas código de
+produto reconhecido para score e roteiro. Arquivos de suporte e tipos
+desconhecidos ficam fora do cálculo e podem ser auditados na sessão, com
+caminho, categoria e motivo. O detalhe de bugs também exclui commits que
+alteram apenas suporte no módulo. A fórmula de score ainda é a anterior;
+disponibilidade das fontes e score v2 seguem pendentes no
+`plano-correcao-detalhe-modulos-e-score.md`.
+
 O garantiu lê três fontes de dado que praticamente qualquer empresa já tem (histórico do
 Git, relatório de testes automatizados, e opcionalmente o rastreador de bugs/incidentes),
 calcula um **score de risco por release**, e usa esse score pra duas coisas: priorizar a

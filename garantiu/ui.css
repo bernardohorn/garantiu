@@ -48,27 +48,29 @@ html, body, [class*="css"] {
 }
 
 .brand-lockup {
-  padding: .4rem .75rem 1.7rem;
+  padding: .15rem .75rem 1.5rem;
   border-bottom: 1px solid var(--g-line);
   margin-bottom: 1.25rem;
 }
 
-.brand-wordmark {
-  color: var(--g-text);
-  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
-  font-size: 1.62rem;
-  font-weight: 760;
-  letter-spacing: -.055em;
-  line-height: 1;
+.brand-full-crop {
+  background: #f7f7f8;
+  border: 1px solid rgba(105, 221, 226, .24);
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, .18);
+  height: 170px;
+  overflow: hidden;
+  position: relative;
 }
 
-.brand-wordmark span {
-  display: inline-block;
-  width: .55rem;
-  height: 1.25rem;
-  margin-left: .18rem;
-  background: var(--g-blue);
-  vertical-align: -.08rem;
+.brand-full-crop img {
+  height: auto;
+  left: 50%;
+  max-width: none;
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 326px;
 }
 
 .brand-lockup p {
@@ -137,10 +139,36 @@ html, body, [class*="css"] {
   padding-top: 1rem;
 }
 
-.sidebar-footer strong {
-  color: #7390ab;
-  font-size: .58rem;
-  letter-spacing: .12em;
+.sidebar-footer img {
+  background: #f7f9fb;
+  border-radius: 7px;
+  box-sizing: border-box;
+  height: 32px;
+  object-fit: contain;
+  object-position: left center;
+  padding: 7px 9px;
+  width: 124px;
+}
+
+.page-brand-symbol {
+  align-items: center;
+  background: #f7f9fb;
+  border: 1px solid #d6e2ec;
+  border-radius: 12px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .18);
+  display: flex;
+  float: right;
+  height: 58px;
+  justify-content: center;
+  margin: 0 0 .75rem 1.25rem;
+  width: 58px;
+}
+
+.page-brand-symbol img {
+  display: block;
+  height: 42px;
+  object-fit: contain;
+  width: 42px;
 }
 
 .page-eyebrow,
@@ -513,6 +541,8 @@ hr {
 
 @media (max-width: 560px) {
   [data-testid="stHeadingWithActionElements"] h1 { font-size: 2rem; }
+  .page-brand-symbol { height: 46px; margin-left: .75rem; width: 46px; }
+  .page-brand-symbol img { height: 34px; width: 34px; }
   .release-context dl { gap: .6rem; }
   .release-context dl div { min-width: 0; padding-left: .6rem; }
   .risk-distribution { grid-template-columns: 1fr; }

@@ -4,6 +4,7 @@ import pytest
 from streamlit.testing.v1 import AppTest
 
 from garantiu.release_history import get_release_history
+from garantiu.ui import BRAND_FULL_PATH, BRAND_SYMBOL_PATH, BRAND_WORDMARK_PATH
 from tests.conftest import init_repo
 from tests.test_repository_source import remote_fixture
 
@@ -242,6 +243,23 @@ def test_default_analysis_has_no_fictitious_test_results(tmp_path):
     at.sidebar.radio[0].set_value("Suíte Automatizada Priorizada").run()
     assert not at.table
     assert "Nenhum relatório" in at.info[0].value
+
+
+def test_brand_assets_are_present_and_rendered_in_all_three_variants():
+    assert BRAND_FULL_PATH.is_file()
+    assert BRAND_SYMBOL_PATH.is_file()
+    assert BRAND_WORDMARK_PATH.is_file()
+
+    at = AppTest.from_file("../app.py", default_timeout=15).run()
+
+    assert not at.exception
+    html = "\n".join(item.value for item in at.markdown)
+    sidebar_html = "\n".join(item.value for item in at.sidebar.markdown)
+    assert 'class="page-brand-symbol"' in html
+    assert 'class="brand-full-crop"' in sidebar_html
+    assert 'class="sidebar-footer"' in sidebar_html
+    assert '# <div class="brand-lockup"' not in sidebar_html
+    assert not at.error
 
 
 def test_documentation_only_interval_does_not_inflate_release_risk(tmp_path):

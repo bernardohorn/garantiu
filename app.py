@@ -25,7 +25,7 @@ from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
 from garantiu.ui import (
-    inject_design_system, render_brand, render_factor_heading,
+    BRAND_SYMBOL_PATH, inject_design_system, render_brand, render_factor_heading,
     render_module_focus, render_page_header, render_release_context,
     render_risk_distribution, render_section_label, render_sidebar_footer,
     risk_level,
@@ -468,7 +468,9 @@ def release_trends():
         st.rerun()
 
 
-st.set_page_config(page_title="garantiu", page_icon="G", layout="wide")
+st.set_page_config(
+    page_title="garantiu", page_icon=str(BRAND_SYMBOL_PATH), layout="wide",
+)
 inject_design_system()
 if "analysis" not in st.session_state:
     st.session_state.analysis = None

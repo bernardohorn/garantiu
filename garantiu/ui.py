@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import base64
+from functools import lru_cache
 from html import escape
 from pathlib import Path
 
@@ -9,12 +11,24 @@ import streamlit as st
 
 
 ROOT = Path(__file__).resolve().parents[1]
+BRAND_ASSET_DIR = ROOT / "garantiu" / "assets"
+BRAND_FULL_PATH = BRAND_ASSET_DIR / "garantiu-logo-full.jpeg"
+BRAND_SYMBOL_PATH = BRAND_ASSET_DIR / "garantiu-symbol.png"
+BRAND_WORDMARK_PATH = BRAND_ASSET_DIR / "garantiu-wordmark.png"
 FACTOR_LABELS = {
     "complexidade": "Complexidade da mudança",
     "bugs": "Histórico de bugs",
     "saude_testes": "Saúde dos testes",
     "incidentes": "Incidentes anteriores",
 }
+
+
+@lru_cache(maxsize=3)
+def _asset_data_uri(path: Path) -> str:
+    """Embed a local brand asset without depending on a static file server."""
+    mime_type = "image/png" if path.suffix.lower() == ".png" else "image/jpeg"
+    payload = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{payload}"
 
 
 def inject_design_system() -> None:
@@ -25,10 +39,13 @@ def inject_design_system() -> None:
 
 def render_brand() -> None:
     """Render the product signature and promise in the sidebar."""
+    full_logo = _asset_data_uri(BRAND_FULL_PATH)
     st.sidebar.markdown(
-        """
-        <div class="brand-lockup" aria-label="Garantiu">
-          <div class="brand-wordmark">garantiu<span aria-hidden="true"></span></div>
+        f"""
+        <div class="brand-lockup">
+          <div class="brand-full-crop">
+            <img src="{full_logo}" alt="Garantiu" />
+          </div>
           <p>Da evidência para entregas com segurança.</p>
         </div>
         """,
@@ -37,10 +54,11 @@ def render_brand() -> None:
 
 
 def render_sidebar_footer() -> None:
+    wordmark = _asset_data_uri(BRAND_WORDMARK_PATH)
     st.sidebar.markdown(
-        """
+        f"""
         <div class="sidebar-footer">
-          <strong>GARANTIU</strong>
+          <img src="{wordmark}" alt="Garantiu" />
           <span>Engenharia de software<br>com mais confiança.</span>
         </div>
         """,
@@ -49,6 +67,15 @@ def render_sidebar_footer() -> None:
 
 
 def render_page_header(eyebrow: str, title: str, description: str) -> None:
+    symbol = _asset_data_uri(BRAND_SYMBOL_PATH)
+    st.markdown(
+        f"""
+        <div class="page-brand-symbol" aria-hidden="true">
+          <img src="{symbol}" alt="" />
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
     st.markdown(
         f"<p class='page-eyebrow'>{escape(eyebrow)}</p>",
         unsafe_allow_html=True,

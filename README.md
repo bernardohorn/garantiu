@@ -222,15 +222,16 @@ resultados sem precisar baixar novamente o repositório.
   esperada é o histórico operacional da equipe.
 - **Detalhes de incidentes:** CSV UTF-8 com `module,description,date`;
   datas no formato `YYYY-MM-DD`. O caminho pode ficar vazio se não houver
-  detalhes. Cabeçalhos ou detalhes inválidos geram erro visível. Os dois
-  modelos podem ser baixados diretamente na primeira tela.
+  detalhes. Cabeçalhos ou detalhes inválidos geram erro visível.
 
 Ao informar a pasta ou o link do repositório, o Garantiu procura automaticamente
 por XMLs JUnit e CSVs que tenham esses cabeçalhos. Um único candidato preenche o
 campo correspondente; quando houver vários, a tela oferece uma lista para
 escolha. Diretórios de dependências, builds, exemplos, fixtures e `sample_data`
 são ignorados para evitar importar arquivos fictícios. A busca fica restrita ao
-projeto informado e pode ser repetida pelo botão **Procurar novamente**.
+projeto informado e à pasta definida em **Armazenamento local**, e pode ser
+repetida pelo botão **Procurar novamente**. Essa configuração fica dentro da
+área **Resultados de testes e incidentes — opcional**.
 
 O histórico de bugs não é enviado manualmente. Ele é extraído do histórico
 Git alcançável pela referência final, procurando mensagens como `fix`, `bug` e

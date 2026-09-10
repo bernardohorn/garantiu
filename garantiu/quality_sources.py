@@ -123,3 +123,21 @@ def discover_quality_sources(
             set(locations), key=lambda item: _candidate_sort_key(kind, item),
         )
     return results
+
+
+def discover_quality_sources_in_directory(
+    directory: str | Path,
+) -> dict[str, list[str]]:
+    """Return quality reports stored in an arbitrary local directory."""
+    results = {"junit": [], "incident_counts": [], "incident_details": []}
+    root = Path(directory).expanduser().resolve()
+    if not root.exists():
+        return results
+    if not root.is_dir():
+        raise ValueError("O local de relatórios precisa ser uma pasta.")
+    _discover_worktree(root, results)
+    for kind, locations in results.items():
+        results[kind] = sorted(
+            set(locations), key=lambda item: _candidate_sort_key(kind, item),
+        )
+    return results

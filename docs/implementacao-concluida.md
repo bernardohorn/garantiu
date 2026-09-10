@@ -54,8 +54,7 @@ O roteiro `plano-ajustes-interface-persistencia.md` também foi implementado:
 - a marca usa somente PNGs transparentes, combinando símbolo e nome sem caixas
   claras no tema escuro;
 - os cabeçalhos numerados foram removidos e o campo de repositório inicia vazio;
-- JUnit e os dois formatos de incidentes são explicados na primeira tela, que
-  oferece os CSVs de `sample_data/` como modelos para download;
+- JUnit e os dois formatos de incidentes são explicados na primeira tela;
 - cada análise grava, em uma transação, o score da release, os quatro fatores
   por módulo, as correções relacionadas aos arquivos e os incidentes importados;
 - reanálises do mesmo intervalo são preservadas como snapshots, enquanto o
@@ -64,8 +63,9 @@ O roteiro `plano-ajustes-interface-persistencia.md` também foi implementado:
   como CSV UTF-8 de releases, bugs ou incidentes;
 - a apresentação usa datas brasileiras, horário de São Paulo e scores com uma
   casa decimal, sem alterar timestamps ISO ou valores numéricos persistidos.
-- a barra lateral permite escolher a pasta de armazenamento local; os três
-  bancos SQLite passam a ser criados e consultados nesse local na sessão atual.
+- a área de dados opcionais permite escolher a pasta de armazenamento local;
+  os bancos SQLite são criados e consultados nesse local na sessão atual, e
+  relatórios colocados na mesma pasta entram na descoberta automática.
 - a primeira tela descobre relatórios JUnit e CSVs de incidentes pelo conteúdo,
   preenche candidatos únicos e oferece escolha quando encontra vários arquivos;
   a mesma descoberta funciona para arquivos versionados em links GitHub.

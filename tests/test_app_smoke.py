@@ -288,7 +288,7 @@ def test_brand_assets_are_present_and_rendered_in_all_three_variants():
     assert not at.error
 
 
-def test_quality_inputs_explain_sources_and_offer_real_csv_templates():
+def test_quality_inputs_explain_sources_and_embed_storage_configuration():
     at = AppTest.from_file("../app.py", default_timeout=15).run()
     captions = "\n".join(item.value for item in at.caption)
 
@@ -296,9 +296,11 @@ def test_quality_inputs_explain_sources_and_offer_real_csv_templates():
     assert "histórico operacional" in captions
     assert "extraído automaticamente" in captions
     assert "ausência de uma fonte não significa ausência de risco" in captions
-    assert [item.label for item in at.download_button] == [
-        "Baixar modelo de contagem", "Baixar modelo de detalhes",
-    ]
+    assert not at.download_button
+    assert at.text_input(key="data_directory_input").label == (
+        "Pasta para salvar e localizar os dados"
+    )
+    assert at.button(key="apply_data_directory").label == "Usar esta pasta"
     assert all(not field.value for field in at.text_input[3:6])
 
 
@@ -377,6 +379,9 @@ def test_user_can_choose_the_local_storage_folder(tmp_path):
     repository.index.add(["checkout/gateway.py"])
     repository.index.commit("fix: gateway")
     repository.close()
+    chosen_directory.mkdir()
+    stored_report = chosen_directory / "junit.xml"
+    stored_report.write_text("<testsuite/>", encoding="utf-8")
 
     at.text_input(key="data_directory_input").set_value(
         str(chosen_directory),
@@ -387,11 +392,14 @@ def test_user_can_choose_the_local_storage_folder(tmp_path):
     assert not at.error
     assert chosen_directory.is_dir()
     assert at.session_state.data_directory == str(chosen_directory.resolve())
-    assert str(chosen_directory.resolve()) in at.sidebar.code[0].value
+    assert str(chosen_directory.resolve()) in at.code[0].value
 
     at.text_input(key="_connect_repository_input").set_value(
         str(repository_path),
     ).run()
+    assert at.text_input(key=f"junit_path:{repository_path}").value == str(
+        stored_report.resolve()
+    )
     at.button(key="analyze_release").click().run()
 
     assert not at.exception

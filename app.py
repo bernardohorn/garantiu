@@ -28,7 +28,9 @@ from garantiu.release_history import (
 )
 from garantiu.scoring import score_modules, score_release
 from garantiu.repository_source import prepare_repository, repository_key
-from garantiu.quality_sources import discover_quality_sources
+from garantiu.quality_sources import (
+    discover_quality_sources, discover_quality_sources_in_directory,
+)
 from garantiu.test_history import flakiness_by_module, record_test_run
 from garantiu.test_prioritization import prioritize_tests
 from garantiu.test_reports import load_project_test_report, test_health_by_module
@@ -50,6 +52,7 @@ SCREENS = [
 REPOSITORY_SOURCE_KEY = "repository_source"
 DATA_DIRECTORY_KEY = "data_directory"
 DATA_DIRECTORY_INPUT_KEY = "data_directory_input"
+DATA_DIRECTORY_ERROR_KEY = "data_directory_error"
 QUALITY_DISCOVERY_KEY = "quality_source_discovery"
 
 
@@ -85,48 +88,63 @@ def _apply_data_directory() -> None:
         directory = _parse_data_directory(st.session_state[DATA_DIRECTORY_INPUT_KEY])
         directory.mkdir(parents=True, exist_ok=True)
     except (OSError, ValueError) as exc:
-        st.sidebar.error(f"Não foi possível usar essa pasta: {exc}")
+        st.session_state[DATA_DIRECTORY_ERROR_KEY] = str(exc)
         return
     st.session_state[DATA_DIRECTORY_KEY] = str(directory)
+    st.session_state.pop(DATA_DIRECTORY_ERROR_KEY, None)
+    st.session_state.pop(QUALITY_DISCOVERY_KEY, None)
     st.session_state.analysis = None
 
 
 def render_storage_location() -> None:
-    """Let the user select where local databases will be written."""
+    """Render storage selection in the optional quality-data area."""
     active_directory = _active_data_directory()
     if DATA_DIRECTORY_INPUT_KEY not in st.session_state:
         st.session_state[DATA_DIRECTORY_INPUT_KEY] = str(active_directory)
-    with st.sidebar.expander("Armazenamento local"):
-        st.text_input(
-            "Pasta para salvar os dados", key=DATA_DIRECTORY_INPUT_KEY,
-            help="Cole o caminho de uma pasta existente ou nova. O Garantiu criará "
-                 "nela os três bancos locais.",
+    st.markdown("#### Armazenamento local")
+    st.caption(
+        "Escolha onde os bancos serão gravados. Relatórios JUnit e CSVs "
+        "colocados nessa pasta também são localizados automaticamente."
+    )
+    st.text_input(
+        "Pasta para salvar e localizar os dados", key=DATA_DIRECTORY_INPUT_KEY,
+        help="Cole o caminho de uma pasta existente ou nova.",
+    )
+    st.button(
+        "Usar esta pasta", key="apply_data_directory",
+        on_click=_apply_data_directory, use_container_width=True,
+    )
+    if DATA_DIRECTORY_ERROR_KEY in st.session_state:
+        st.error(
+            "Não foi possível usar essa pasta: "
+            f"{st.session_state[DATA_DIRECTORY_ERROR_KEY]}"
         )
-        st.button(
-            "Usar esta pasta", key="apply_data_directory",
-            on_click=_apply_data_directory, use_container_width=True,
-        )
-        st.caption("Pasta em uso nesta sessão:")
-        st.code(str(active_directory), language=None)
-        st.caption(
-            "Quando houver dados, os arquivos serão salvos aqui: garantiu.db, "
-            "garantiu_test_history.db e garantiu_release_history.db."
-        )
+    st.caption("Pasta em uso nesta sessão:")
+    st.code(str(active_directory), language=None)
+    st.caption(
+        "Quando houver dados, os bancos garantiu.db, garantiu_test_history.db "
+        "e garantiu_release_history.db serão salvos aqui."
+    )
 
 
 def _discover_repository_quality_sources(repo_source: str, ref: str) -> dict:
-    """Discover reports once per repository/ref pair in the current session."""
+    """Discover reports in the repository and selected local data folder."""
     empty = {"junit": [], "incident_counts": [], "incident_details": []}
-    if not repo_source.strip() or not ref.strip():
-        return {"identity": None, "sources": empty, "error": None}
-    identity = (repo_source.strip(), ref.strip())
+    data_directory = _active_data_directory()
+    identity = (repo_source.strip(), ref.strip(), str(data_directory))
     cached = st.session_state.get(QUALITY_DISCOVERY_KEY)
     if cached and cached.get("identity") == identity:
         return cached
     try:
         with st.spinner("Procurando relatórios no projeto..."):
-            with prepare_repository(repo_source.strip()) as source:
-                sources = discover_quality_sources(source.path, ref.strip())
+            sources = discover_quality_sources_in_directory(data_directory)
+            if repo_source.strip() and ref.strip():
+                with prepare_repository(repo_source.strip()) as source:
+                    repository_sources = discover_quality_sources(
+                        source.path, ref.strip(),
+                    )
+                for kind, candidates in repository_sources.items():
+                    sources[kind] = list(dict.fromkeys([*sources[kind], *candidates]))
         result = {"identity": identity, "sources": sources, "error": None}
     except (OSError, ValueError, git.GitError, git.BadName, git.BadObject) as exc:
         result = {"identity": identity, "sources": empty, "error": str(exc)}
@@ -286,23 +304,7 @@ def connect_release():
         st.caption(
             "Descrição e data dos incidentes, obtidas do histórico operacional da equipe."
         )
-        template_col, detail_template_col = st.columns(2)
-        template_col.download_button(
-            "Baixar modelo de contagem",
-            data=(ROOT / "sample_data" / "incidents.csv").read_bytes(),
-            file_name="modelo-incidentes.csv",
-            mime="text/csv; charset=utf-8",
-            key="download_incident_counts_template",
-            use_container_width=True,
-        )
-        detail_template_col.download_button(
-            "Baixar modelo de detalhes",
-            data=(ROOT / "sample_data" / "incident_details.csv").read_bytes(),
-            file_name="modelo-detalhes-incidentes.csv",
-            mime="text/csv; charset=utf-8",
-            key="download_incident_details_template",
-            use_container_width=True,
-        )
+        render_storage_location()
         st.caption(
             "O histórico de bugs não exige arquivo: ele é extraído automaticamente "
             "das mensagens de commit do Git, como fix, bug e corrige."
@@ -859,5 +861,3 @@ except sqlite3.Error:
         "Não foi possível acessar ou gravar o histórico local. "
         "Confira a permissão da pasta de dados e tente novamente."
     )
-
-render_storage_location()

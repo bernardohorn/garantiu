@@ -202,9 +202,8 @@ JUnit informa resultados de execução. Ele não representa cobertura de código
 - [x] Explicar cada entrada logo abaixo do respectivo campo.
 - [x] Informar que o histórico de bugs é obtido automaticamente do Git.
 - [x] Informar que a ausência de uma fonte não significa ausência de risco.
-- [x] Adicionar botões para baixar modelos dos CSVs de incidentes.
-- [x] Reutilizar os arquivos de `sample_data/` como fonte dos modelos, evitando
-  exemplos duplicados no código.
+- [x] Exibir a configuração de armazenamento local na área de dados opcionais.
+- [x] Localizar também os relatórios colocados na pasta de armazenamento.
 - [x] Depois da análise, mostrar quais fontes foram utilizadas e quais estavam
   ausentes.
 
@@ -227,8 +226,8 @@ checkout,Falha ao confirmar pagamento,2026-09-10
 
 ### Testes
 
-- [x] Confirmar que os downloads usam os arquivos corretos.
-- [x] Confirmar que nenhuma fonte opcional é preenchida automaticamente.
+- [x] Confirmar que os botões de download foram removidos.
+- [x] Confirmar preenchimento automático para um candidato e escolha para vários.
 - [x] Testar análise sem dados opcionais.
 - [x] Testar análise com JUnit e os dois CSVs.
 
